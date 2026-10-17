@@ -119,7 +119,8 @@
       "shortcutName": "Edge-Drop",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "Edge-Drop-Setup-${version}.${ext}"
+      "artifactName": "Edge-Drop-Setup-${version}.${ext}",
+      "include": "resources/installer.nsh"
     },
     "appx": {
       "identityName": "SouvikDey.EdgeDrop",
