@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const originalPlatform = process.platform
+beforeAll(() => {
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+})
+afterAll(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+})
 
 const mocks = vi.hoisted(() => ({
   isPackaged: true,
