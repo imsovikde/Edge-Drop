@@ -90,6 +90,57 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     }
   }
 
+  const [vaultMsg, setVaultMsg] = useState<string | null>(null)
+
+  const handleForceSync = async () => {
+    playButtonClickSound()
+    setIsSubmitting(true)
+    setAuthError(null)
+    setAuthSuccess(null)
+    try {
+      await edge.forceSync()
+      setAuthSuccess('Force sync complete: local and cloud vaults reconciled.')
+    } catch (err: any) {
+      setAuthError(err?.message || 'Force sync failed')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleExportVault = async () => {
+    playButtonClickSound()
+    setIsSubmitting(true)
+    setVaultMsg(null)
+    setAuthError(null)
+    try {
+      const res = await edge.exportVault()
+      if (res.success) {
+        setVaultMsg(`Exported ${res.itemCount} items (${res.imageCount} images) to ${res.path}`)
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Export failed')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleImportVault = async () => {
+    playButtonClickSound()
+    setIsSubmitting(true)
+    setVaultMsg(null)
+    setAuthError(null)
+    try {
+      const res = await edge.importVault()
+      if (res.success) {
+        setVaultMsg(`Restored ${res.restoredItems} items (${res.restoredImages} images) successfully.`)
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Import failed')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const handleTriggerSync = async () => {
     playButtonClickSound()
     try {
@@ -184,15 +235,26 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
 
           <div className="shelf-card-inline-action" style={{ display: 'flex', gap: '6px' }}>
             {isConnected && (
-              <button
-                type="button"
-                className="shelf-btn-secondary"
-                onClick={handleTriggerSync}
-                style={{ fontSize: '11px', padding: '4px 10px' }}
-                disabled={isSyncing}
-              >
-                Sync Now
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="shelf-btn-secondary"
+                  onClick={handleTriggerSync}
+                  style={{ fontSize: '11px', padding: '4px 8px' }}
+                  disabled={isSyncing}
+                >
+                  Sync Now
+                </button>
+                <button
+                  type="button"
+                  className="shelf-btn-accent"
+                  onClick={handleForceSync}
+                  style={{ fontSize: '11px', padding: '4px 8px' }}
+                  disabled={isSubmitting}
+                >
+                  Force Sync
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -436,7 +498,47 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
         </div>
       </div>
 
-      {/* Card 4: Custom Firebase Vault (Encrypted) */}
+      {/* Card 4: Local Snapshot & Offline Vault (.edvault) */}
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">LOCAL SNAPSHOT & OFFLINE VAULT</div>
+        </div>
+        <div className="shelf-card-inline">
+          <div className="shelf-card-inline-text">
+            <div className="setting-title">Snapshot Archive (.edvault)</div>
+            <div className="setting-desc">
+              Export all clipboard history, binary images, and settings into a single compressed .edvault archive for offline migration or backup.
+            </div>
+          </div>
+          <div className="shelf-card-inline-action" style={{ display: 'flex', gap: '6px' }}>
+            <button
+              type="button"
+              className="shelf-btn-secondary"
+              onClick={handleExportVault}
+              style={{ fontSize: '11px', padding: '4px 10px' }}
+              disabled={isSubmitting}
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              className="shelf-btn-secondary"
+              onClick={handleImportVault}
+              style={{ fontSize: '11px', padding: '4px 10px' }}
+              disabled={isSubmitting}
+            >
+              Restore
+            </button>
+          </div>
+        </div>
+        {vaultMsg && (
+          <div style={{ padding: '6px 12px 10px', fontSize: '11px', color: '#10b981' }}>
+            ✓ {vaultMsg}
+          </div>
+        )}
+      </div>
+
+      {/* Card 5: Custom Firebase Vault (Encrypted) */}
       <div className="setting-card">
         <div className="shelf-card-top">
           <div className="setting-group-label">CUSTOM FIREBASE CONFIGURATION</div>

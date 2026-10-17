@@ -8,6 +8,7 @@ import { EmojiCategoryBar } from './EmojiCategoryBar'
 
 import { useTranslation } from '../i18n'
 import { ClearMenu } from './ClearMenu'
+import { edge } from '../lib/edge'
 import type { ClipboardItemDto, TypeFilter } from '../../shared/types'
 
 export interface HeaderProps {
@@ -44,6 +45,32 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
       patchSettings({ lastSeenChangelogVersion: currentVersion })
     }
     window.open('https://github.com/imsovikde/Edge-Drop/releases', '_blank')
+  }
+
+  const cloudSyncState = useStore((s) => s.cloudSyncState)
+  const isSyncing = cloudSyncState?.status === 'syncing'
+  const isErrorOrDirty = cloudSyncState?.status === 'error' || cloudSyncState?.status === 'offline' || (cloudSyncState?.pendingMutations != null && cloudSyncState.pendingMutations > 0)
+  
+  const ledColor = isSyncing ? '#F59E0B' : (isErrorOrDirty ? '#EF4444' : '#10B981')
+  const ledGlow = isSyncing 
+    ? '0 0 8px rgba(245, 158, 11, 0.75)' 
+    : (isErrorOrDirty ? '0 0 6px rgba(239, 68, 68, 0.65)' : '0 0 6px rgba(16, 185, 129, 0.55)')
+    
+  const syncTooltip = isSyncing 
+    ? 'Syncing items & settings to cloud...' 
+    : (isErrorOrDirty 
+        ? `${cloudSyncState?.pendingMutations || 0} unsynced item(s)${cloudSyncState?.error ? ` • ${cloudSyncState.error}` : ' • Click to sync now'}`
+        : 'All items & settings synced')
+
+  const handleLedClick = async () => {
+    playButtonClickSound()
+    setSettingsTab('cloud')
+    if (!settingsOpen) {
+      setSettingsOpen(true)
+    }
+    try {
+      await edge.forceSync()
+    } catch { /* ignore */ }
   }
 
   const typeFilter = useStore((s) => s.typeFilter)
@@ -172,7 +199,8 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
               {[
                 { id: 'behaviour' as const, label: t('tabs.behaviour') },
                 { id: 'position' as const, label: t('tabs.position') },
-                { id: 'appearance' as const, label: t('tabs.appearance') }
+                { id: 'appearance' as const, label: t('tabs.appearance') },
+                { id: 'cloud' as const, label: 'Vault' }
               ].map((tab) => {
                 const active = settingsTab === tab.id
                 return (
@@ -281,6 +309,41 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
             )}
           </button>
         )}
+
+        {/* Hardware-style Green/Red/Amber Sync Status LED */}
+        <button
+          type="button"
+          className="sync-led-btn"
+          aria-label={syncTooltip}
+          title={syncTooltip}
+          onClick={handleLedClick}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: 4,
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            borderRadius: '50%',
+            outline: 'none',
+            flexShrink: 0,
+            width: 22,
+            height: 22,
+            position: 'relative'
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              backgroundColor: ledColor,
+              boxShadow: ledGlow,
+              transition: 'background-color 0.25s ease, box-shadow 0.25s ease',
+              display: 'block'
+            }}
+          />
+        </button>
 
         <button
           type="button"
