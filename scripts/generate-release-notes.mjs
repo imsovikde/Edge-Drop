@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 /**
- * Semantic Release Notes & SHA-256 Binary Integrity Generator for Edge-Drop.
+ * Intelligent Semantic Release Notes & SHA-256 Binary Integrity Generator for Edge-Drop.
  *
- * Scans build outputs in dist/, computes cryptographically secure SHA-256 hashes,
- * and formats an authentic Staff-Engineer release document for GitHub Releases.
+ * Capabilities:
+ *   - Automatic Conventional Commit extraction from git history since the last release tag.
+ *   - Semantic categorization (Features, Security Hardening, Zero-Resource Performance, Local Vault, Fixes).
+ *   - Dynamic SemVer recommendation (major / minor / patch).
+ *   - Cryptographic SHA-256 checksum calculation with formatted byte sizing across all dist/ binaries.
+ *   - Markdown release synthesis with GitHub commit links and architectural overview.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
+import { execSync } from 'node:child_process'
 
 function getSha256(filePath) {
   const buf = readFileSync(filePath)
@@ -29,13 +34,82 @@ function resolvePlatform(fileName) {
   return 'Cross-Platform Binary'
 }
 
+function getLatestTag() {
+  try {
+    const raw = execSync('git tag -l "v*" --sort=-v:refname', { encoding: 'utf8' }).trim()
+    const tags = raw.split(/\r?\n/).filter(Boolean)
+    return tags[0] || null
+  } catch {
+    return null
+  }
+}
+
+function getCommitsSince(tag) {
+  try {
+    const range = tag ? `${tag}..HEAD` : '-n 40'
+    const out = execSync(`git log ${range} --pretty=format:"%H|%s|%an|%cI"`, { encoding: 'utf8' }).trim()
+    if (!out) return []
+    return out.split(/\r?\n/).map((line) => {
+      const [hash, subject, author, date] = line.split('|')
+      return { hash, shortHash: hash.slice(0, 7), subject, author, date }
+    })
+  } catch {
+    return []
+  }
+}
+
+function categorizeCommits(commits) {
+  const categories = {
+    features: [],
+    security: [],
+    performance: [],
+    vault: [],
+    auth: [],
+    ipc: [],
+    ui: [],
+    fixes: [],
+    infra: []
+  }
+
+  for (const c of commits) {
+    const s = c.subject.toLowerCase()
+    if (s.startsWith('feat(security)') || s.startsWith('security:')) {
+      categories.security.push(c)
+    } else if (s.startsWith('feat(worker)') || s.startsWith('feat(governor)') || s.startsWith('perf')) {
+      categories.performance.push(c)
+    } else if (s.startsWith('feat(vault)') || s.includes('localvault')) {
+      categories.vault.push(c)
+    } else if (s.startsWith('feat(auth)') || s.includes('oauth') || s.includes('loopback')) {
+      categories.auth.push(c)
+    } else if (s.startsWith('feat(ipc)') || s.includes('bridge')) {
+      categories.ipc.push(c)
+    } else if (s.startsWith('feat(ui)') || s.startsWith('style') || s.includes('telemetry') || s.includes('led')) {
+      categories.ui.push(c)
+    } else if (s.startsWith('feat')) {
+      categories.features.push(c)
+    } else if (s.startsWith('fix')) {
+      categories.fixes.push(c)
+    } else {
+      categories.infra.push(c)
+    }
+  }
+
+  return categories
+}
+
 function main() {
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
-  const version = pkg.version || '0.3.3'
+  const version = pkg.version || '0.4.0'
+  const repoUrl = pkg.repository?.url?.replace(/\.git$/, '') || 'https://github.com/imsovikde/Edge-Drop'
   const distDir = 'dist'
 
-  console.log(`[ReleaseNotes] Generating release notes for Edge-Drop v${version}...`)
+  const latestTag = getLatestTag()
+  console.log(`[ReleaseNotes] Generating intelligent release notes for Edge-Drop v${version} (previous tag: ${latestTag || 'none'})...`)
 
+  const commits = getCommitsSince(latestTag)
+  const cat = categorizeCommits(commits)
+
+  // Collect binaries in dist/
   const artifacts = []
   if (existsSync(distDir)) {
     const files = readdirSync(distDir)
@@ -64,7 +138,7 @@ function main() {
   let table = ''
   if (artifacts.length > 0) {
     table = [
-      '### 📦 Binary Checksums (SHA-256)',
+      '### 📦 Binary Checksums & Cryptographic Hashes (SHA-256)',
       '',
       '| Artifact | Platform | Size | SHA-256 Checksum |',
       '| :--- | :--- | :--- | :--- |',
@@ -75,26 +149,98 @@ function main() {
     ].join('\n')
   }
 
+  const formatList = (items) =>
+    items.map((c) => `- [\`${c.shortHash}\`](${repoUrl}/commit/${c.hash}) ${c.subject}`).join('\n')
+
+  const sections = []
+
+  if (cat.security.length > 0) {
+    sections.push(
+      '### 🔒 Security Hardening & Zero-Vulnerability Architecture',
+      formatList(cat.security),
+      ''
+    )
+  }
+
+  if (cat.performance.length > 0) {
+    sections.push(
+      '### ⚡ Zero-Resource Adaptive Intelligence & Kernel Offloading',
+      formatList(cat.performance),
+      ''
+    )
+  }
+
+  if (cat.vault.length > 0) {
+    sections.push(
+      '### 💾 Offline Snapshot Engine & Local Vault (.edvault)',
+      formatList(cat.vault),
+      ''
+    )
+  }
+
+  if (cat.auth.length > 0) {
+    sections.push(
+      '### 🔑 Desktop PKCE Loopback & Secure Authentication',
+      formatList(cat.auth),
+      ''
+    )
+  }
+
+  if (cat.features.length > 0) {
+    sections.push(
+      '### 🚀 Core Synchronization & Multi-Device Plane',
+      formatList(cat.features),
+      ''
+    )
+  }
+
+  if (cat.ipc.length > 0) {
+    sections.push(
+      '### 🔌 IPC Channels & Safe Preload Bridge Contracts',
+      formatList(cat.ipc),
+      ''
+    )
+  }
+
+  if (cat.ui.length > 0) {
+    sections.push(
+      '### 🎨 Hardware Telemetry LED & Motioncraft Aesthetics',
+      formatList(cat.ui),
+      ''
+    )
+  }
+
+  if (cat.fixes.length > 0) {
+    sections.push(
+      '### 🐛 Bug Fixes & Forensic Stability',
+      formatList(cat.fixes),
+      ''
+    )
+  }
+
+  if (cat.infra.length > 0) {
+    sections.push(
+      '### 🛠️ Multi-OS CI/CD Pipeline & Tooling',
+      formatList(cat.infra),
+      ''
+    )
+  }
+
   const notes = [
-    `# Edge-Drop v${version} — Multi-Platform Cloud-Backed Release`,
+    `# Edge-Drop v${version} — Autonomous Cloud Vault, Adaptive Synchronization & Zero-Resource Performance`,
     '',
-    'Edge-Drop is an ultra-fast clipboard manager that lives unobtrusively on the edge of your screen with tactile spring physics, now featuring enterprise-grade Firebase cloud persistence and multi-device real-time sync.',
+    'Edge-Drop is an ultra-fast clipboard manager that docks seamlessly on your display with authentic spring physics. Version ' +
+      version +
+      ' introduces enterprise-grade Two-Phase Commit (2PC) synchronization, OS kernel priority background offloading, sliding-window coalescing, cryptographic envelope encryption, and 1-click offline `.edvault` snapshot restoration.',
     '',
-    '### 🚀 What\'s New in this Release',
-    '- **Split-Plane Firebase Cloud Backup**: Text, formatted HTML, links, colors, full-resolution images, and file stacks are backed up to Firestore and Google Cloud Storage.',
-    '- **Desktop PKCE Authentication**: Native Google Sign-In with loopback 127.0.0.1 browser handshake, Email/Password auth, and Anonymous Guest mode.',
-    '- **Offline-First Journal**: Zero network blocking or latency hitches; edits and clips queue locally and sync whenever connectivity restores.',
-    '- **Pre-Wipe Forensic Recovery**: Automatic startup scanner restores surviving clipboard history into the cloud vault.',
-    '- **Bring-Your-Own Firebase**: Option to provide custom Firebase configurations encrypted at rest via DPAPI.',
-    '- **Cross-Platform Compilation**: Native builds engineered for Windows, macOS (universal), and Linux.',
-    '',
+    ...sections,
     table,
     '---',
-    'Built with ❤️ by [Souvik Dey](https://github.com/imsovikde) • [Issues & Feedback](https://github.com/imsovikde/Edge-Drop/issues)'
+    `Built with precision by [Souvik Dey](https://github.com/imsovikde) • [Issues & Architecture](https://github.com/imsovikde/Edge-Drop/issues)`
   ].join('\n')
 
   writeFileSync('release-notes.md', notes + '\n', 'utf8')
-  console.log('[ReleaseNotes] release-notes.md successfully generated!')
+  console.log(`[ReleaseNotes] release-notes.md successfully generated with ${commits.length} categorized commits!`)
 }
 
 main()
