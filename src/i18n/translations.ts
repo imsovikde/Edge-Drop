@@ -12,6 +12,7 @@ export interface TranslationKeys {
     behaviour: string
     position: string
     appearance: string
+    vault?: string
     updates?: string
     generalStartup?: string
     activationShortcuts?: string
@@ -561,6 +562,7 @@ export const en: TranslationKeys = {
     "behaviour": "Behaviour",
     "position": "Position",
     "appearance": "Appearance",
+    "vault": "Vault",
     "updates": "Updates",
     "generalStartup": "General & Startup",
     "activationShortcuts": "Shortcuts & Hover",

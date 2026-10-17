@@ -447,7 +447,7 @@ Edge-Drop is in **public beta**. The following are planned, in rough priority or
 - [x] **In-shelf search** — type-to-filter without stealing focus, click-to-paste straight into the active app
 - [ ] **Linux & macOS ports** — replace Win32-specific paths (OLE drag, registry login, PowerShell HDROP) with cross-platform equivalents
 - [ ] **Plugin SDK** — let users write custom format readers and drag-out targets
-- [ ] **Cloud sync (opt-in, E2E encrypted)** — sync pinned items across machines
+- [x] **Cloud Vault & Multi-Device Sync** — real-time clipboard synchronization, Two-Phase Commit binary image backup, 1-click `.edvault` snapshot migration, and Bring Your Own Firebase support ([Setup Guide](docs/FIREBASE_SETUP.md))
 
 ---
 

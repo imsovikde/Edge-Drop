@@ -41,7 +41,7 @@ export function Settings({
     { id: 'behaviour',  label: t('tabs.behaviour') },
     { id: 'position',   label: t('tabs.position') },
     { id: 'appearance', label: t('tabs.appearance') },
-    { id: 'cloud',      label: 'Cloud Vault' },
+    { id: 'cloud',      label: t('tabs.vault') || 'Vault' },
   ]
   const patch = useStore((s) => s.patchSettings)
   const pushToast = useStore((s) => s.pushToast)
@@ -1724,7 +1724,7 @@ export function Settings({
 
   return (
     <div
-      style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+      style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', background: '#0a0a0a' }}
     >
       {/* ── Stationary Fixed Header (Tab Selector) ────────────────── */}
           <div className="settings-fixed-header">
