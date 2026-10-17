@@ -1,0 +1,19 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "anonymous": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Edge-Drop",
+        "supportEmail": "imsovikde@gmail.com"
+      }
+    }
+  }
+}
