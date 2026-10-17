@@ -42,15 +42,102 @@ export function quitAndInstallUpdate(): void {
 }
 
 /**
+ * Module-level autoUpdater initialization helper ensuring consistent feed URL and listeners.
+ */
+export function getOrInitAutoUpdater(): any {
+  if (isStoreBuild()) return null
+  if (_autoUpdater) return _autoUpdater
+
+  try {
+    const { autoUpdater } = require('electron-updater')
+    _autoUpdater = autoUpdater
+
+    const settings = getSettings()
+    const mode = resolveUpdateMode(settings)
+    const autoDownload = mode === 'auto'
+
+    autoUpdater.logger = console
+    autoUpdater.autoDownload = autoDownload
+    autoUpdater.autoInstallOnAppQuit = autoDownload
+
+    // Explicitly target imsovikde/Edge-Drop repository releases
+    try {
+      autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'imsovikde',
+        repo: 'Edge-Drop'
+      })
+    } catch {
+      /* ignore if feed already set */
+    }
+
+    if (!app.isPackaged) {
+      autoUpdater.forceDevUpdateConfig = true
+    }
+
+    autoUpdater.on('checking-for-update', () => {
+      console.log('[AutoUpdater] Checking for update... Current version:', app.getVersion())
+    })
+
+    autoUpdater.on('update-available', (info: { version: string }) => {
+      console.log('[AutoUpdater] New update available on GitHub:', info.version)
+      _cachedUpdateInfo = { hasUpdate: true, latestVersion: info.version, downloaded: false }
+      pushState.updateAvailable({ version: info.version })
+    })
+
+    autoUpdater.on('update-not-available', (info: { version: string }) => {
+      console.log('[AutoUpdater] App is up to date. Latest release:', info.version, 'Current:', app.getVersion())
+    })
+
+    autoUpdater.on('download-progress', (progressObj: { percent: number; bytesPerSecond?: number; transferred?: number; total?: number }) => {
+      const percent = Math.min(100, Math.max(0, Math.round(progressObj.percent || 0)))
+      console.log(`[AutoUpdater] Download progress: ${percent}%`)
+      if (_cachedUpdateInfo) {
+        _cachedUpdateInfo.downloadProgress = {
+          percent,
+          bytesPerSecond: progressObj.bytesPerSecond,
+          transferred: progressObj.transferred,
+          total: progressObj.total
+        }
+      }
+      pushState.updateProgress({
+        percent,
+        bytesPerSecond: progressObj.bytesPerSecond,
+        transferred: progressObj.transferred,
+        total: progressObj.total
+      })
+    })
+
+    autoUpdater.on('update-downloaded', (info: { version: string }) => {
+      console.log('[AutoUpdater] Update downloaded and ready to install:', info.version)
+      _cachedUpdateInfo = { hasUpdate: true, latestVersion: info.version, downloaded: true }
+      pushState.updateDownloaded({ version: info.version })
+    })
+
+    autoUpdater.on('error', (err: Error | string) => {
+      const msg = typeof err === 'string' ? err : err?.message
+      console.warn('[AutoUpdater] Update check error:', msg)
+    })
+
+    return _autoUpdater
+  } catch (err) {
+    console.error('[AutoUpdater] Initialization failed:', err)
+    return null
+  }
+}
+
+/**
  * Syncs the download flags on electron-updater whenever user changes settings.
  * Only 'auto' mode downloads; 'notify' checks without downloading.
  */
 export function syncAutoUpdaterState(): void {
-  if (isStoreBuild() || !_autoUpdater) return
+  if (isStoreBuild()) return
+  const updater = getOrInitAutoUpdater()
+  if (!updater) return
   const mode = resolveUpdateMode(getSettings())
   const autoDownload = mode === 'auto'
-  _autoUpdater.autoDownload = autoDownload
-  _autoUpdater.autoInstallOnAppQuit = autoDownload
+  updater.autoDownload = autoDownload
+  updater.autoInstallOnAppQuit = autoDownload
   console.log('[AutoUpdater] Synced mode =', mode, 'autoDownload =', autoDownload)
 }
 
@@ -75,12 +162,14 @@ export function triggerBackgroundCheck(delayMs = 3000): void {
   } catch {
     return
   }
-  if (mode === 'off' || !_autoUpdater) return
+  if (mode === 'off') return
+  const updater = getOrInitAutoUpdater()
+  if (!updater) return
   console.log('[AutoUpdater] Background check scheduled (mode switch).')
   bgCheckTimer = setTimeout(() => {
     bgCheckTimer = null
     try {
-      const r = _autoUpdater.checkForUpdates() as unknown
+      const r = updater.checkForUpdates() as unknown
       const p = r as Promise<unknown> | undefined
       if (p && typeof p.catch === 'function') {
         p.catch((err: unknown) => {
@@ -161,24 +250,6 @@ export async function checkForUpdatesManual(): Promise<{ status: string; version
     return { status: 'up-to-date', version: app.getVersion() }
   }
 
-  // Ensure autoUpdater reference is initialized for subsequent download calls
-  if (!_autoUpdater) {
-    try {
-      const { autoUpdater } = require('electron-updater')
-      _autoUpdater = autoUpdater
-      _autoUpdater.autoDownload = false
-      _autoUpdater.autoInstallOnAppQuit = false
-      if (!app.isPackaged) {
-        _autoUpdater.forceDevUpdateConfig = true
-      }
-    } catch {
-      /* ignore */
-    }
-  } else {
-    _autoUpdater.autoDownload = false
-    _autoUpdater.autoInstallOnAppQuit = false
-  }
-
   // 1. Fast path: Direct GitHub API query (returns in ~300ms)
   const fastResult = await checkGitHubReleaseFast()
   if (fastResult && fastResult.tag_name) {
@@ -196,15 +267,21 @@ export async function checkForUpdatesManual(): Promise<{ status: string; version
   }
 
   // 2. Fallback path: electron-updater check with 5-second race timeout
-  if (_autoUpdater) {
+  const updater = getOrInitAutoUpdater()
+  if (updater) {
+    const settings = getSettings()
+    const mode = resolveUpdateMode(settings)
+    updater.autoDownload = mode === 'auto'
+    updater.autoInstallOnAppQuit = mode === 'auto'
     try {
-      const checkPromise = _autoUpdater.checkForUpdates()
+      const checkPromise = updater.checkForUpdates()
       const timeoutPromise = new Promise<{ updateInfo?: { version: string } }>((_, reject) =>
         setTimeout(() => reject(new Error('Update check timeout')), 5000)
       )
       const result = await Promise.race([checkPromise, timeoutPromise])
       if (result && result.updateInfo && semverCompare(result.updateInfo.version, app.getVersion()) > 0) {
         _cachedUpdateInfo = { hasUpdate: true, latestVersion: result.updateInfo.version, downloaded: false }
+        pushState.updateAvailable({ version: result.updateInfo.version })
         return { status: 'available', version: result.updateInfo.version }
       }
       return { status: 'up-to-date', version: app.getVersion() }
@@ -221,28 +298,15 @@ export async function checkForUpdatesManual(): Promise<{ status: string; version
  */
 export async function startUpdateDownload(): Promise<void> {
   if (isStoreBuild()) return
-  if (!_autoUpdater) {
-    try {
-      const { autoUpdater } = require('electron-updater')
-      _autoUpdater = autoUpdater
-      // Match manual-check semantics: never auto-download as a side effect.
-      // An explicit downloadUpdate() call below is unaffected by these flags.
-      _autoUpdater.autoDownload = false
-      _autoUpdater.autoInstallOnAppQuit = false
-      if (!app.isPackaged) {
-        _autoUpdater.forceDevUpdateConfig = true
-      }
-    } catch {
-      return
-    }
-  }
+  const updater = getOrInitAutoUpdater()
+  if (!updater) return
   try {
-    await _autoUpdater.downloadUpdate()
+    await updater.downloadUpdate()
   } catch (err) {
     console.warn('[AutoUpdater] downloadUpdate failed, retrying with checkForUpdates first:', err)
     try {
-      await _autoUpdater.checkForUpdates()
-      await _autoUpdater.downloadUpdate()
+      await updater.checkForUpdates()
+      await updater.downloadUpdate()
     } catch (retryErr) {
       console.error('[AutoUpdater] downloadUpdate retry failed:', retryErr)
     }
@@ -259,87 +323,27 @@ export function initAutoUpdater(): void {
     return
   }
 
-  try {
-    const { autoUpdater } = require('electron-updater')
-    _autoUpdater = autoUpdater
+  const updater = getOrInitAutoUpdater()
+  if (!updater) return
 
-    const settings = getSettings()
-    const mode = resolveUpdateMode(settings)
-    const autoDownload = mode === 'auto'
-    // 'notify' still checks at launch (tiny version query) but never downloads
-    // on its own; 'off' stays fully network-silent.
-    const shouldCheck = mode !== 'off'
+  const settings = getSettings()
+  const mode = resolveUpdateMode(settings)
+  const autoDownload = mode === 'auto'
+  // 'notify' still checks at launch (tiny version query) but never downloads
+  // on its own; 'off' stays fully network-silent.
+  const shouldCheck = mode !== 'off'
 
-    autoUpdater.logger = console
-    autoUpdater.autoDownload = autoDownload
-    autoUpdater.autoInstallOnAppQuit = autoDownload
-
-    if (!app.isPackaged) {
-      console.log('[AutoUpdater] Unpackaged dev build detected — enabling forceDevUpdateConfig')
-      autoUpdater.forceDevUpdateConfig = true
+  if (shouldCheck) {
+    if (!autoDownload) {
+      console.log('[AutoUpdater] Notify mode: background check without auto-download.')
     }
-
-    autoUpdater.on('checking-for-update', () => {
-      console.log('[AutoUpdater] Checking for update... Current version:', app.getVersion())
-    })
-
-    autoUpdater.on('update-available', (info: { version: string }) => {
-      console.log('[AutoUpdater] New update available on GitHub:', info.version)
-      _cachedUpdateInfo = { hasUpdate: true, latestVersion: info.version, downloaded: false }
-      pushState.updateAvailable({ version: info.version })
-    })
-
-    autoUpdater.on('update-not-available', (info: { version: string }) => {
-      console.log('[AutoUpdater] App is up to date. Latest release:', info.version, 'Current:', app.getVersion())
-    })
-
-    autoUpdater.on('download-progress', (progressObj: { percent: number; bytesPerSecond?: number; transferred?: number; total?: number }) => {
-      const percent = Math.min(100, Math.max(0, Math.round(progressObj.percent || 0)))
-      console.log(`[AutoUpdater] Download progress: ${percent}%`)
-      if (_cachedUpdateInfo) {
-        _cachedUpdateInfo.downloadProgress = {
-          percent,
-          bytesPerSecond: progressObj.bytesPerSecond,
-          transferred: progressObj.transferred,
-          total: progressObj.total
-        }
-      }
-      pushState.updateProgress({
-        percent,
-        bytesPerSecond: progressObj.bytesPerSecond,
-        transferred: progressObj.transferred,
-        total: progressObj.total
+    setTimeout(() => {
+      updater.checkForUpdates().catch((err: Error | string) => {
+        const msg = typeof err === 'string' ? err : err?.message
+        console.warn('[AutoUpdater] checkForUpdates failed:', msg)
       })
-    })
-
-    autoUpdater.on('update-downloaded', (info: { version: string }) => {
-      console.log('[AutoUpdater] Update downloaded and ready to install:', info.version)
-      _cachedUpdateInfo = { hasUpdate: true, latestVersion: info.version, downloaded: true }
-      pushState.updateDownloaded({ version: info.version })
-    })
-
-    autoUpdater.on('error', (err: Error | string) => {
-      const msg = typeof err === 'string' ? err : err?.message
-      console.warn('[AutoUpdater] Update check error:', msg)
-    })
-
-    // Background check runs in 'auto' and 'notify' modes; only 'off' stays
-    // fully network-silent. In 'notify' mode autoDownload is off, so a found
-    // update only surfaces the Download/Skip prompt — nothing downloads.
-    if (shouldCheck) {
-      if (!autoDownload) {
-        console.log('[AutoUpdater] Notify mode: background check without auto-download.')
-      }
-      setTimeout(() => {
-        autoUpdater.checkForUpdates().catch((err: Error | string) => {
-          const msg = typeof err === 'string' ? err : err?.message
-          console.warn('[AutoUpdater] checkForUpdates failed:', msg)
-        })
-      }, 3000)
-    } else {
-      console.log('[AutoUpdater] Updates disabled by user setting. Staying network-silent on startup.')
-    }
-  } catch (err) {
-    console.error('[AutoUpdater] Initialization failed:', err)
+    }, 3000)
+  } else {
+    console.log('[AutoUpdater] Updates disabled by user setting. Staying network-silent on startup.')
   }
 }
