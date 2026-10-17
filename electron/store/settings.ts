@@ -5,9 +5,10 @@
  * The store guards against partial/corrupt files by deep-merging onto the
  * defaults so a bad field never takes the whole app down.
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { DEFAULT_SETTINGS, isUpdateMode, normalizeHoverOpenDelay, type Settings } from '../../shared/types'
 import { PATHS } from './paths'
+import { atomicWriteFileSync } from '../backup/cryptoIntegrity'
 
 let cache: Settings | null = null
 
@@ -75,7 +76,7 @@ export function saveSettings(patch: Partial<Settings>): Settings {
   const next = merge(loadSettings(), patch)
   cache = next
   try {
-    writeFileSync(PATHS.settingsFile(), JSON.stringify(next, null, 2), 'utf8')
+    atomicWriteFileSync(PATHS.settingsFile(), JSON.stringify(next, null, 2))
   } catch {
     /* non-fatal; settings stay in memory */
   }
