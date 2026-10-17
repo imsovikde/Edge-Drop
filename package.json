@@ -54,7 +54,9 @@
       "!**/node_modules/svg-path-bbox/**",
       "!**/node_modules/react-dom/**",
       "!**/node_modules/prism-react-renderer/**",
-      "!**/node_modules/koffi/doc/**"
+      "!**/node_modules/koffi/doc/**",
+      "!**/node_modules/firebase/**",
+      "!**/node_modules/@firebase/**"
     ],
     "extraResources": [
       {

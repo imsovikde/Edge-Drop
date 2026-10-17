@@ -18,7 +18,21 @@ export default defineConfig(({ mode }) => {
   return {
     main: {
       define: firebaseDefines,
-      plugins: [externalizeDepsPlugin()],
+      plugins: [
+        externalizeDepsPlugin({
+          exclude: [
+            'firebase',
+            '@firebase/app',
+            '@firebase/auth',
+            '@firebase/firestore',
+            '@firebase/storage',
+            '@firebase/component',
+            '@firebase/util',
+            '@firebase/logger',
+            '@firebase/webchannel-wrapper'
+          ]
+        })
+      ],
       build: {
         rollupOptions: {
           input: { index: resolve(__dirname, 'electron/main/index.ts') }
