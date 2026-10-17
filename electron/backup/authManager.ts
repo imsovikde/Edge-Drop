@@ -194,16 +194,80 @@ class AuthManager {
             try {
               const credential = GoogleAuthProvider.credential(idToken)
               const userCred = await signInWithCredential(auth, credential)
-              res.writeHead(200, { 'Content-Type': 'text/html' })
-              res.end('<h3>Authentication Successful!</h3><p>You may now close this tab and return to Edge-Drop.</p>')
+              res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+              res.end(`
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <meta charset="utf-8">
+                    <title>Edge-Drop Authentication</title>
+                    <style>
+                      body { background: #09090b; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: grid; place-items: center; height: 100vh; margin: 0; }
+                      .card { background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 36px 44px; text-align: center; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+                      .badge { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); color: #10b981; margin-bottom: 20px; font-size: 26px; }
+                      h2 { margin: 0 0 10px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+                      p { margin: 0; color: #a1a1aa; font-size: 14px; line-height: 1.5; }
+                    </style>
+                  </head>
+                  <body>
+                    <div class="card">
+                      <div class="badge">✓</div>
+                      <h2>Connected to Edge-Drop</h2>
+                      <p>Authentication complete. Returning to your active session...</p>
+                    </div>
+                    <script>
+                      try { window.close(); } catch(e) {}
+                      setTimeout(() => { try { window.close(); } catch(e) {} }, 800);
+                    </script>
+                  </body>
+                </html>
+              `)
               cleanup()
               this.currentUser = toUserDto(userCred.user)
               this.notifyListeners()
+
+              // Refocus Edge-Drop active window
+              try {
+                const { getMainWindow } = require('../main/window')
+                const win = getMainWindow()
+                if (win && !win.isDestroyed()) {
+                  app.focus({ steal: true })
+                  win.show()
+                  win.focus()
+                }
+              } catch { /* ignore */ }
+
+              // Trigger immediate full sync pass
+              try {
+                const { syncEngine } = require('./syncEngine')
+                syncEngine.triggerSync()
+              } catch { /* ignore */ }
+
               resolve(this.currentUser!)
               return
             } catch (err: any) {
-              res.writeHead(500, { 'Content-Type': 'text/html' })
-              res.end(`<h3>Sign-in Error</h3><p>${err.message}</p>`)
+              res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' })
+              res.end(`
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <meta charset="utf-8">
+                    <title>Authentication Error</title>
+                    <style>
+                      body { background: #09090b; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: grid; place-items: center; height: 100vh; margin: 0; }
+                      .card { background: #18181b; border: 1px solid #ef4444; border-radius: 16px; padding: 36px 44px; text-align: center; max-width: 400px; }
+                      h2 { margin: 0 0 10px; font-size: 18px; color: #ef4444; }
+                      p { margin: 0; color: #a1a1aa; font-size: 14px; }
+                    </style>
+                  </head>
+                  <body>
+                    <div class="card">
+                      <h2>Authentication Error</h2>
+                      <p>Unable to complete sign-in. You can close this tab and try again in Edge-Drop.</p>
+                    </div>
+                  </body>
+                </html>
+              `)
               cleanup()
               reject(err)
               return
@@ -211,10 +275,12 @@ class AuthManager {
           }
 
           // If loopback received fragment via hash, send a small JS redirect to convert hash to query
-          res.writeHead(200, { 'Content-Type': 'text/html' })
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
           res.end(`
+            <!DOCTYPE html>
             <html>
-              <body>
+              <head><meta charset="utf-8"><title>Connecting...</title></head>
+              <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;display:grid;place-items:center;height:100vh;">
                 <script>
                   if (window.location.hash) {
                     window.location.href = '/callback?' + window.location.hash.substring(1);
