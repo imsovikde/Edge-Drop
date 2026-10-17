@@ -5,7 +5,7 @@
  * renderer calls them through the typed preload bridge, so a signature mismatch
  * is a compile-time error rather than a runtime one.
  */
-import { app, ipcMain, clipboard, nativeImage, shell, net } from 'electron'
+import { app, ipcMain, clipboard, nativeImage, shell, net, dialog } from 'electron'
 import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { psHost, getSystemPowerShellPath, getWritableCwd } from './powershell'
@@ -29,6 +29,7 @@ import { emojiAssetDir, readEmojiBatch } from './imageProtocol'
 import { authManager } from '../backup/authManager'
 import { syncEngine } from '../backup/syncEngine'
 import { encryptCustomConfig } from '../backup/firebaseConfig'
+import { localVault } from '../backup/localVault'
 
 export { isStoreBuild }
 
@@ -246,6 +247,42 @@ export function registerIpc(): void {
 
   handle('sync:trigger', async () => {
     syncEngine.triggerSync()
+  })
+
+  handle('sync:force', async () => {
+    await syncEngine.triggerSync()
+  })
+
+  handle('vault:export', async (destPath) => {
+    let target = destPath
+    if (!target) {
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Export Edge-Drop Vault',
+        defaultPath: `edge-drop-vault-${new Date().toISOString().slice(0, 10)}.edvault`,
+        filters: [{ name: 'Edge-Drop Vault Archive', extensions: ['edvault'] }]
+      })
+      if (canceled || !filePath) {
+        return { success: false, itemCount: 0, imageCount: 0, path: '' }
+      }
+      target = filePath
+    }
+    return localVault.exportSnapshot(target)
+  })
+
+  handle('vault:import', async (srcPath) => {
+    let target = srcPath
+    if (!target) {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Import Edge-Drop Vault',
+        filters: [{ name: 'Edge-Drop Vault Archive', extensions: ['edvault'] }],
+        properties: ['openFile']
+      })
+      if (canceled || filePaths.length === 0) {
+        return { success: false, restoredItems: 0, restoredImages: 0 }
+      }
+      target = filePaths[0]
+    }
+    return localVault.importSnapshot(target)
   })
 
   handle('app:install-update', () => {

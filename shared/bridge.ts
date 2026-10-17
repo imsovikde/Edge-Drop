@@ -78,6 +78,9 @@ export interface EdgeApi {
   signOut: () => Promise<void>
   setCustomFirebaseConfig: (configJson: string) => Promise<boolean>
   triggerSync: () => Promise<void>
+  forceSync: () => Promise<void>
+  exportVault: (destPath?: string) => Promise<{ success: boolean; itemCount: number; imageCount: number; path: string }>
+  importVault: (srcPath?: string) => Promise<{ success: boolean; restoredItems: number; restoredImages: number }>
 
   /* Main -> Renderer */
   onSyncState: (cb: (state: import('./types').CloudSyncState) => void) => () => void

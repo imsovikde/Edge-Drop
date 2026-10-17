@@ -225,6 +225,9 @@ const api = {
   signOut: () => invoke('auth:sign-out'),
   setCustomFirebaseConfig: (configJson: string) => invoke('auth:set-custom-config', configJson),
   triggerSync: () => invoke('sync:trigger'),
+  forceSync: () => invoke('sync:force'),
+  exportVault: (destPath?: string) => invoke('vault:export', destPath),
+  importVault: (srcPath?: string) => invoke('vault:import', srcPath),
 
   /* Main -> Renderer */
   onSyncState: (cb: (state: EventArgs<'sync:state-changed'>[0]) => void) => on('sync:state-changed', cb),

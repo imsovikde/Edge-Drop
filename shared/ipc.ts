@@ -145,6 +145,15 @@ export interface InvokeMap {
 
   /** Trigger an immediate synchronization pass. */
   'sync:trigger': { args: []; result: void }
+
+  /** Force immediate bidirectional reconciliation pass. */
+  'sync:force': { args: []; result: void }
+
+  /** Export .edvault backup snapshot archive. */
+  'vault:export': { args: [destPath?: string]; result: { success: boolean; itemCount: number; imageCount: number; path: string } }
+
+  /** Import .edvault backup snapshot archive. */
+  'vault:import': { args: [srcPath?: string]; result: { success: boolean; restoredItems: number; restoredImages: number } }
 }
 
 /* ------------------------------------------------------------------ */
