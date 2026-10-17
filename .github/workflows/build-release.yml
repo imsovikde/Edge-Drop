@@ -40,15 +40,24 @@ jobs:
           - os: windows-latest
             name: Windows
             build_cmd: npm run build:win
-            artifact_pattern: dist/Edge-Drop-Setup-*.exe
+            artifact_pattern: |
+              dist/Edge-Drop-Setup-*.exe
+              dist/*.yml
+              dist/*.blockmap
           - os: macos-latest
             name: macOS
             build_cmd: npm run build:mac
-            artifact_pattern: dist/Edge-Drop-Mac-*.*
+            artifact_pattern: |
+              dist/Edge-Drop-Mac-*.*
+              dist/*.yml
+              dist/*.blockmap
           - os: ubuntu-latest
             name: Linux
             build_cmd: npm run build:linux
-            artifact_pattern: dist/Edge-Drop-Linux-*.*
+            artifact_pattern: |
+              dist/Edge-Drop-Linux-*.*
+              dist/*.yml
+              dist/*.blockmap
 
     env:
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -95,7 +104,7 @@ jobs:
         with:
           name: edge-drop-${{ matrix.name }}
           path: ${{ matrix.artifact_pattern }}
-          if-no-files-found: error
+          if-no-files-found: warn
 
   release:
     name: Publish Release & Integrity Hashes
@@ -148,5 +157,8 @@ jobs:
             dist/*.zip
             dist/*.AppImage
             dist/*.deb
+            dist/*.rpm
+            dist/*.yml
+            dist/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
