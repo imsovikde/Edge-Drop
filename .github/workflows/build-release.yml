@@ -135,6 +135,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_tag.outputs.TAG_NAME }}
+          target_commitish: ${{ github.sha }}
           name: Edge-Drop ${{ steps.release_tag.outputs.TAG_NAME }}
           body_path: release-notes.md
           draft: false
