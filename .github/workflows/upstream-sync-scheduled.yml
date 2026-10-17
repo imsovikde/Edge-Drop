@@ -1,0 +1,55 @@
+name: Upstream Sync (Scheduled 7-Day)
+
+on:
+  schedule:
+    # Runs every 7 days at 00:00 UTC
+    - cron: '0 0 */7 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync Deepender25/Edge-Drop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure Git Identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Execute 3-Way Upstream Sync Engine
+        run: node scripts/sync-upstream.mjs
+
+      - name: Check for Clean Staging
+        id: git_status
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "CHANGES=true" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGES=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit, Push & Trigger Auto-Build
+        if: steps.git_status.outputs.CHANGES == 'true'
+        run: |
+          git add -A
+          git commit -m "chore(upstream): sync Deepender25/Edge-Drop weekly delta"
+          git push origin main
+          gh workflow run "Build & Release Multi-OS" --ref main -f create_release=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

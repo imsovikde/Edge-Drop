@@ -1,0 +1,62 @@
+name: Upstream Sync (Manual 1-Click)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Force sync regardless of SHA match'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+jobs:
+  manual-sync:
+    name: 1-Click Conflict-Free Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure Git Identity
+        run: |
+          git config user.name "Souvik Dey"
+          git config user.email "imsovikde@gmail.com"
+
+      - name: Execute 3-Way Upstream Sync Engine
+        run: node scripts/sync-upstream.mjs
+
+      - name: Check for Changes
+        id: git_status
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "CHANGES=true" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGES=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit & Push Upstream Delta
+        if: steps.git_status.outputs.CHANGES == 'true'
+        run: |
+          git add -A
+          git commit -m "chore(upstream): manual 1-click sync from Deepender25/Edge-Drop"
+          git push origin main
+
+      - name: Trigger Build & Release
+        if: steps.git_status.outputs.CHANGES == 'true' || github.event.inputs.force_sync == 'true' || github.event.inputs.force_sync == true
+        run: |
+          gh workflow run "Build & Release Multi-OS" --ref main -f create_release=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
