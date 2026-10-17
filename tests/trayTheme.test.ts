@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
+
+const originalPlatform = process.platform
+beforeAll(() => {
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+})
+afterAll(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+})
 
 const mocks = vi.hoisted(() => ({
   execFileSync: vi.fn(),
