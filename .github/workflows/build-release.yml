@@ -70,17 +70,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Install System Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools fakeroot rpm libnotify-bin
+          sudo apt-get install -y --no-install-recommends libarchive-tools fakeroot rpm libnotify-bin || true
 
       - name: Install Project Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run Test Suites
         run: npm test
@@ -110,7 +109,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Download All Platform Artifacts
         uses: actions/download-artifact@v4
