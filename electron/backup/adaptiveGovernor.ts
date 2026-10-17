@@ -148,8 +148,21 @@ class AdaptiveGovernor {
   private scheduleCoalescedFlush(): void {
     if (this.isSuspended) return
 
-    // 300ms window on AC power, 1200ms on battery power to conserve energy
-    const windowMs = this.isOnBattery ? 1200 : 300
+    const maxRetry = Math.max(
+      0,
+      ...Array.from(this.dirtyItems.values()).map((e) => e.retryCount),
+      this.settingsDirty ? this.settingsDirty.retryCount : 0
+    )
+
+    // 300ms base window on AC power, 1200ms on battery power to conserve energy
+    let windowMs = this.isOnBattery ? 1200 : 300
+
+    if (maxRetry > 0) {
+      // Exponential backoff with jitter: 2^retry * base, capped at 30 seconds
+      const backoff = Math.min(30000, windowMs * Math.pow(2, Math.min(maxRetry, 6)))
+      const jitter = Math.floor(Math.random() * 500)
+      windowMs = backoff + jitter
+    }
 
     if (this.coalesceTimer) clearTimeout(this.coalesceTimer)
     this.coalesceTimer = setTimeout(() => {
@@ -209,6 +222,19 @@ class AdaptiveGovernor {
     const keys = Array.from(this.dirtyItems.keys()).sort().join(':')
     const hasSettings = this.settingsDirty ? 'settings:dirty' : 'settings:clean'
     return computeSha256(`${keys}|${hasSettings}`).slice(0, 16)
+  }
+
+  /**
+   * Cleanly dispose timers and clear in-memory buffers upon application exit.
+   */
+  public dispose(): void {
+    if (this.coalesceTimer) {
+      clearTimeout(this.coalesceTimer)
+      this.coalesceTimer = null
+    }
+    this.dirtyItems.clear()
+    this.settingsDirty = null
+    this.syncCallback = null
   }
 }
 

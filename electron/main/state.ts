@@ -156,6 +156,11 @@ export function stopStateTimers(): void {
     clearInterval(pruneTimer)
     pruneTimer = null
   }
+  try {
+    syncEngine.dispose()
+  } catch (err) {
+    console.warn('[State] Error disposing syncEngine:', err)
+  }
 }
 
 export function getStore(): ItemStore {

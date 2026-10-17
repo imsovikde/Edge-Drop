@@ -29,6 +29,7 @@ import { getStore, loadSettings, saveSettings, pushState } from '../main/state'
 import { PATHS } from '../store/paths'
 
 class SyncEngine {
+  private static uploadedBlobs: Map<string, string> = new Map()
   private status: CloudSyncStatus = 'idle'
   private lastSyncedAt: number | null = null
   private lastError: string | null = null
@@ -168,42 +169,58 @@ class SyncEngine {
       } else {
         let sanitizedData = { ...entry.item.data }
 
-        // Two-Phase Commit (2PC) for Binary Image Blobs
+        // Two-Phase Commit (2PC) for Binary Image Blobs with Deduplication
         if (entry.item.data.kind === 'image') {
-          const imagePath = PATHS.imageFile(entry.item.data.imageId)
-          if (existsSync(imagePath)) {
-            try {
-              const imgBuf = readFileSync(imagePath)
-              const sha256 = syncWorker.hashBuffer(imgBuf)
-              const storage = getFirebaseStorage()
+          const itemSha256 = (entry.item.data as any).sha256
+          const itemUrl = (entry.item.data as any).downloadUrl
 
-              if (storage) {
-                try {
-                  const blobRef = ref(storage, `users/${user.uid}/blobs/${sha256}.png`)
-                  await uploadBytes(blobRef, imgBuf, { contentType: 'image/png' })
-                  const downloadUrl = await getDownloadURL(blobRef)
-                  sanitizedData = { ...sanitizedData, downloadUrl, sha256 } as any
-                } catch {
-                  // Direct Firestore blob doc fallback
-                  const blobDocRef = doc(db, 'users', user.uid, 'blobs', sha256)
-                  await setDoc(blobDocRef, {
-                    sha256,
-                    base64: imgBuf.toString('base64'),
-                    createdAt: Date.now()
-                  })
-                  sanitizedData = { ...sanitizedData, sha256 } as any
+          if (itemSha256 && (itemUrl || SyncEngine.uploadedBlobs.has(itemSha256))) {
+            const cachedUrl = itemUrl || SyncEngine.uploadedBlobs.get(itemSha256)
+            sanitizedData = { ...sanitizedData, downloadUrl: cachedUrl, sha256: itemSha256 } as any
+          } else {
+            const imagePath = PATHS.imageFile(entry.item.data.imageId)
+            if (existsSync(imagePath)) {
+              try {
+                const imgBuf = readFileSync(imagePath)
+                const sha256 = syncWorker.hashBuffer(imgBuf)
+
+                if (SyncEngine.uploadedBlobs.has(sha256)) {
+                  const cachedUrl = SyncEngine.uploadedBlobs.get(sha256)
+                  sanitizedData = { ...sanitizedData, downloadUrl: cachedUrl, sha256 } as any
+                } else {
+                  const storage = getFirebaseStorage()
+                  if (storage) {
+                    try {
+                      const blobRef = ref(storage, `users/${user.uid}/blobs/${sha256}.png`)
+                      await uploadBytes(blobRef, imgBuf, { contentType: 'image/png' })
+                      const downloadUrl = await getDownloadURL(blobRef)
+                      SyncEngine.uploadedBlobs.set(sha256, downloadUrl)
+                      sanitizedData = { ...sanitizedData, downloadUrl, sha256 } as any
+                    } catch {
+                      // Direct Firestore blob doc fallback
+                      const blobDocRef = doc(db, 'users', user.uid, 'blobs', sha256)
+                      await setDoc(blobDocRef, {
+                        sha256,
+                        base64: imgBuf.toString('base64'),
+                        createdAt: Date.now()
+                      })
+                      SyncEngine.uploadedBlobs.set(sha256, '')
+                      sanitizedData = { ...sanitizedData, sha256 } as any
+                    }
+                  } else {
+                    const blobDocRef = doc(db, 'users', user.uid, 'blobs', sha256)
+                    await setDoc(blobDocRef, {
+                      sha256,
+                      base64: imgBuf.toString('base64'),
+                      createdAt: Date.now()
+                    })
+                    SyncEngine.uploadedBlobs.set(sha256, '')
+                    sanitizedData = { ...sanitizedData, sha256 } as any
+                  }
                 }
-              } else {
-                const blobDocRef = doc(db, 'users', user.uid, 'blobs', sha256)
-                await setDoc(blobDocRef, {
-                  sha256,
-                  base64: imgBuf.toString('base64'),
-                  createdAt: Date.now()
-                })
-                sanitizedData = { ...sanitizedData, sha256 } as any
+              } catch (err) {
+                console.warn('[SyncEngine] Blob processing error:', err)
               }
-            } catch (err) {
-              console.warn('[SyncEngine] Blob processing error:', err)
             }
           }
         }
@@ -322,6 +339,16 @@ class SyncEngine {
       this.unsubscribeSettings()
       this.unsubscribeSettings = null
     }
+  }
+
+  /**
+   * Tear down all active remote Firestore listeners and governor buffers cleanly.
+   */
+  public dispose(): void {
+    this.stopRemoteListeners()
+    adaptiveGovernor.dispose()
+    this.listeners.clear()
+    SyncEngine.uploadedBlobs.clear()
   }
 }
 
