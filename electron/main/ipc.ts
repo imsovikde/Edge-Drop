@@ -28,7 +28,7 @@ import { isPasteableEmoji } from '../../shared/emoji'
 import { emojiAssetDir, readEmojiBatch } from './imageProtocol'
 import { authManager } from '../backup/authManager'
 import { syncEngine } from '../backup/syncEngine'
-import { encryptCustomConfig } from '../backup/firebaseConfig'
+import { encryptCustomConfig, parseAnyFirebaseConfigInput, verifyFirebaseConnectivity, reinitializeFirebase } from '../backup/firebaseConfig'
 import { localVault } from '../backup/localVault'
 
 export { isStoreBuild }
@@ -241,6 +241,49 @@ export function registerIpc(): void {
       return true
     } catch (err) {
       console.error('[IPC] auth:set-custom-config failed:', err)
+      return false
+    }
+  })
+
+  handle('auth:verify-and-connect', async (rawInput) => {
+    try {
+      const parsedConfig = parseAnyFirebaseConfigInput(rawInput)
+      if (!parsedConfig) {
+        return {
+          success: false,
+          error: 'Could not parse configuration. Please provide valid JSON, JS snippet, or .env values with apiKey and projectId.'
+        }
+      }
+
+      const preflight = await verifyFirebaseConnectivity(parsedConfig)
+      if (!preflight.ok) {
+        return {
+          success: false,
+          error: preflight.error || 'Firebase API key connectivity check failed.'
+        }
+      }
+
+      // Reinitialize Firebase in main process
+      await reinitializeFirebase(parsedConfig)
+
+      // Encrypt and save
+      const encrypted = encryptCustomConfig(JSON.stringify(parsedConfig, null, 2))
+      saveSettings({ customFirebaseConfig: encrypted })
+
+      return { success: true, config: parsedConfig }
+    } catch (err: any) {
+      console.error('[IPC] auth:verify-and-connect error:', err)
+      return { success: false, error: err?.message || 'Verification and connection failed.' }
+    }
+  })
+
+  handle('auth:reset-custom-config', async () => {
+    try {
+      saveSettings({ customFirebaseConfig: undefined })
+      await reinitializeFirebase(null)
+      return true
+    } catch (err) {
+      console.error('[IPC] auth:reset-custom-config failed:', err)
       return false
     }
   })

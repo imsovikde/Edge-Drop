@@ -4,8 +4,9 @@
  * Responsibilities:
  *   - Google Sign-In via ephemeral 127.0.0.1 loopback listener + system browser flow.
  *   - GitHub OAuth / Token Sign-In.
- *   - Email / Password Registration & Sign-In.
- *   - Anonymous Guest Sign-In.
+ *   - Email / Password Registration & Sign-In via Direct REST API with Firebase SDK fallback.
+ *   - Anonymous Guest Sign-In via Direct REST API with Firebase SDK fallback.
+ *   - Session token refresh via Google Token Service (https://securetoken.googleapis.com).
  *   - Credential persistence encrypted via Electron safeStorage (DPAPI).
  */
 import { app, shell, safeStorage } from 'electron'
@@ -46,6 +47,33 @@ export function toUserDto(user: User | null): FirebaseUserDto | null {
   }
 }
 
+export function formatAuthError(errCodeOrMsg: string): string {
+  const msg = String(errCodeOrMsg || '')
+  if (msg.includes('EMAIL_NOT_FOUND')) return 'No account found with this email address.'
+  if (msg.includes('INVALID_PASSWORD')) return 'Incorrect password. Please verify and try again.'
+  if (msg.includes('INVALID_LOGIN_CREDENTIALS')) return 'Invalid email or password.'
+  if (msg.includes('EMAIL_EXISTS')) return 'An account with this email address already exists.'
+  if (msg.includes('OPERATION_NOT_ALLOWED')) return 'Email/Password sign-in is not enabled in Firebase Console.'
+  if (msg.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) return 'Too many failed login attempts. Please try again later.'
+  if (msg.includes('USER_DISABLED')) return 'This user account has been disabled.'
+  if (msg.includes('WEAK_PASSWORD')) return 'Password should be at least 6 characters.'
+  if (msg.includes('INVALID_EMAIL')) return 'Please provide a valid email address.'
+  if (msg.includes('NETWORK_REQUEST_FAILED')) return 'Network connection failed. Check your internet connectivity.'
+  return msg.replace(/^Firebase:\s*/, '').replace(/\s*\([a-z0-9/-]+\)\.?$/i, '')
+}
+
+interface PersistedAuthSession {
+  uid: string
+  email: string | null
+  displayName: string | null
+  photoURL: string | null
+  isAnonymous: boolean
+  providerId: string
+  idToken?: string
+  refreshToken?: string
+  savedAt: number
+}
+
 class AuthManager {
   private currentUser: FirebaseUserDto | null = null
   private listeners: Set<(user: FirebaseUserDto | null) => void> = new Set()
@@ -55,18 +83,19 @@ class AuthManager {
     if (this.initialized) return
     this.initialized = true
 
-    const auth = getFirebaseAuth()
-    if (!auth) return
-
-    fbOnAuthStateChanged(auth, (user) => {
-      this.currentUser = toUserDto(user)
-      if (user) {
-        this.persistSession(user)
-      }
-      this.notifyListeners()
-    })
-
+    // Restore saved session from DPAPI-encrypted disk storage
     this.restoreSession()
+
+    const auth = getFirebaseAuth()
+    if (auth) {
+      fbOnAuthStateChanged(auth, (user) => {
+        if (user) {
+          this.currentUser = toUserDto(user)
+          this.persistSession(user)
+          this.notifyListeners()
+        }
+      })
+    }
   }
 
   public getCurrentUser(): FirebaseUserDto | null {
@@ -91,13 +120,24 @@ class AuthManager {
 
   private persistSession(user: User): void {
     try {
-      const file = getAuthEncFile()
-      const data = JSON.stringify({
+      this.persistAuthTokens({
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
+        photoURL: user.photoURL,
+        isAnonymous: user.isAnonymous,
+        providerId: user.providerData?.[0]?.providerId || 'firebase',
         savedAt: Date.now()
       })
+    } catch (err) {
+      console.warn('[AuthManager] persistSession failed:', err)
+    }
+  }
+
+  private persistAuthTokens(session: PersistedAuthSession): void {
+    try {
+      const file = getAuthEncFile()
+      const data = JSON.stringify(session)
       if (safeStorage.isEncryptionAvailable()) {
         const encrypted = safeStorage.encryptString(data)
         writeFileSync(file, encrypted)
@@ -105,8 +145,36 @@ class AuthManager {
         writeFileSync(file, data, 'utf8')
       }
     } catch (err) {
-      console.warn('[AuthManager] persistSession failed:', err)
+      console.warn('[AuthManager] persistAuthTokens failed:', err)
     }
+  }
+
+  private async refreshAuthToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string } | null> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) return null
+
+    try {
+      const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(config.apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+        }).toString()
+      })
+
+      if (!res.ok) return null
+      const data = (await res.json()) as any
+      if (data?.id_token && data?.refresh_token) {
+        return {
+          idToken: data.id_token,
+          refreshToken: data.refresh_token
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthManager] Token refresh failed:', err)
+    }
+    return null
   }
 
   private restoreSession(): void {
@@ -124,9 +192,40 @@ class AuthManager {
       } else {
         dataStr = raw.toString('utf8')
       }
-      const parsed = JSON.parse(dataStr)
+      const parsed = JSON.parse(dataStr) as PersistedAuthSession
       if (parsed && parsed.uid) {
+        this.currentUser = {
+          uid: parsed.uid,
+          email: parsed.email || null,
+          displayName: parsed.displayName || null,
+          photoURL: parsed.photoURL || null,
+          isAnonymous: !!parsed.isAnonymous,
+          providerId: parsed.providerId || 'firebase'
+        }
         console.log(`[AuthManager] Restored previous session for user ${parsed.email || parsed.uid}`)
+        this.notifyListeners()
+
+        // Background refresh token
+        if (parsed.refreshToken) {
+          this.refreshAuthToken(parsed.refreshToken)
+            .then((refreshed) => {
+              if (refreshed) {
+                this.persistAuthTokens({
+                  ...parsed,
+                  idToken: refreshed.idToken,
+                  refreshToken: refreshed.refreshToken,
+                  savedAt: Date.now()
+                })
+              }
+            })
+            .catch(() => {})
+        }
+
+        // Also sync SDK auth state if anonymous
+        const auth = getFirebaseAuth()
+        if (auth && !auth.currentUser && parsed.isAnonymous) {
+          fbSignInAnonymously(auth).catch(() => {})
+        }
       }
     } catch {
       /* ignore corrupted or obsolete session files */
@@ -134,30 +233,180 @@ class AuthManager {
   }
 
   public async signInWithEmail(email: string, pass: string): Promise<FirebaseUserDto> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) throw new Error('Firebase configuration is missing or invalid')
+
+    const cleanEmail = email.trim()
+    const cleanPass = pass.trim()
+    if (!cleanEmail || !cleanPass) throw new Error('Please enter both email and password.')
+
+    // 1. Direct REST call to Identity Toolkit
+    const restUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(config.apiKey)}`
+    const res = await fetch(restUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: cleanPass,
+        returnSecureToken: true
+      })
+    })
+
+    const data = (await res.json()) as any
+    if (!res.ok) {
+      const errMsg = data?.error?.message || `Sign in failed with status ${res.status}`
+      throw new Error(formatAuthError(errMsg))
+    }
+
+    const userDto: FirebaseUserDto = {
+      uid: data.localId,
+      email: data.email || cleanEmail,
+      displayName: data.displayName || null,
+      photoURL: null,
+      isAnonymous: false,
+      providerId: 'password'
+    }
+
+    // 2. Also authenticate Firebase JS SDK if available so Firestore rules accept requests
     const auth = getFirebaseAuth()
-    if (!auth) throw new Error('Firebase Auth is not initialized or configured')
-    const cred = await signInWithEmailAndPassword(auth, email, pass)
-    this.currentUser = toUserDto(cred.user)
+    if (auth) {
+      try {
+        await signInWithEmailAndPassword(auth, cleanEmail, cleanPass)
+      } catch (err) {
+        console.warn('[AuthManager] Firebase SDK sign-in sync warning:', err)
+      }
+    }
+
+    this.currentUser = userDto
+    this.persistAuthTokens({
+      uid: userDto.uid,
+      email: userDto.email,
+      displayName: userDto.displayName,
+      photoURL: userDto.photoURL,
+      isAnonymous: false,
+      providerId: 'password',
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      savedAt: Date.now()
+    })
     this.notifyListeners()
-    return this.currentUser!
+    return userDto
   }
 
   public async signUpWithEmail(email: string, pass: string): Promise<FirebaseUserDto> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) throw new Error('Firebase configuration is missing or invalid')
+
+    const cleanEmail = email.trim()
+    const cleanPass = pass.trim()
+    if (!cleanEmail || !cleanPass) throw new Error('Please enter both email and password.')
+    if (cleanPass.length < 6) throw new Error('Password must be at least 6 characters long.')
+
+    // 1. Direct REST call to Identity Toolkit
+    const restUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(config.apiKey)}`
+    const res = await fetch(restUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: cleanPass,
+        returnSecureToken: true
+      })
+    })
+
+    const data = (await res.json()) as any
+    if (!res.ok) {
+      const errMsg = data?.error?.message || `Registration failed with status ${res.status}`
+      throw new Error(formatAuthError(errMsg))
+    }
+
+    const userDto: FirebaseUserDto = {
+      uid: data.localId,
+      email: data.email || cleanEmail,
+      displayName: null,
+      photoURL: null,
+      isAnonymous: false,
+      providerId: 'password'
+    }
+
+    // 2. Also register in Firebase JS SDK if available
     const auth = getFirebaseAuth()
-    if (!auth) throw new Error('Firebase Auth is not initialized or configured')
-    const cred = await createUserWithEmailAndPassword(auth, email, pass)
-    this.currentUser = toUserDto(cred.user)
+    if (auth) {
+      try {
+        await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass)
+      } catch (err) {
+        console.warn('[AuthManager] Firebase SDK registration sync warning:', err)
+      }
+    }
+
+    this.currentUser = userDto
+    this.persistAuthTokens({
+      uid: userDto.uid,
+      email: userDto.email,
+      displayName: userDto.displayName,
+      photoURL: userDto.photoURL,
+      isAnonymous: false,
+      providerId: 'password',
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      savedAt: Date.now()
+    })
     this.notifyListeners()
-    return this.currentUser!
+    return userDto
   }
 
   public async signInAnonymously(): Promise<FirebaseUserDto> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) throw new Error('Firebase configuration is missing or invalid')
+
+    // 1. Direct REST call
+    const restUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(config.apiKey)}`
+    const res = await fetch(restUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        returnSecureToken: true
+      })
+    })
+
+    const data = (await res.json()) as any
+    if (!res.ok) {
+      const errMsg = data?.error?.message || `Guest sign-in failed with status ${res.status}`
+      throw new Error(formatAuthError(errMsg))
+    }
+
+    const userDto: FirebaseUserDto = {
+      uid: data.localId,
+      email: null,
+      displayName: 'Guest User',
+      photoURL: null,
+      isAnonymous: true,
+      providerId: 'anonymous'
+    }
+
     const auth = getFirebaseAuth()
-    if (!auth) throw new Error('Firebase Auth is not initialized or configured')
-    const cred = await fbSignInAnonymously(auth)
-    this.currentUser = toUserDto(cred.user)
+    if (auth) {
+      try {
+        await fbSignInAnonymously(auth)
+      } catch (err) {
+        console.warn('[AuthManager] Firebase SDK anonymous sync warning:', err)
+      }
+    }
+
+    this.currentUser = userDto
+    this.persistAuthTokens({
+      uid: userDto.uid,
+      email: null,
+      displayName: 'Guest User',
+      photoURL: null,
+      isAnonymous: true,
+      providerId: 'anonymous',
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      savedAt: Date.now()
+    })
     this.notifyListeners()
-    return this.currentUser!
+    return userDto
   }
 
   public async signInWithGoogle(): Promise<FirebaseUserDto> {
@@ -172,7 +421,11 @@ class AuthManager {
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId)
         if (server) {
-          try { server.close() } catch { /* ignore */ }
+          try {
+            server.close()
+          } catch {
+            /* ignore */
+          }
         }
       }
 
@@ -224,6 +477,7 @@ class AuthManager {
               `)
               cleanup()
               this.currentUser = toUserDto(userCred.user)
+              this.persistSession(userCred.user)
               this.notifyListeners()
 
               // Refocus Edge-Drop active window
@@ -235,13 +489,17 @@ class AuthManager {
                   win.show()
                   win.focus()
                 }
-              } catch { /* ignore */ }
+              } catch {
+                /* ignore */
+              }
 
               // Trigger immediate full sync pass
               try {
                 const { syncEngine } = require('./syncEngine')
                 syncEngine.triggerSync()
-              } catch { /* ignore */ }
+              } catch {
+                /* ignore */
+              }
 
               resolve(this.currentUser!)
               return
@@ -328,6 +586,7 @@ class AuthManager {
       const credential = GithubAuthProvider.credential(token)
       const userCred = await signInWithCredential(auth, credential)
       this.currentUser = toUserDto(userCred.user)
+      this.persistSession(userCred.user)
       this.notifyListeners()
       return this.currentUser!
     }
@@ -338,7 +597,11 @@ class AuthManager {
   public async signOut(): Promise<void> {
     const auth = getFirebaseAuth()
     if (auth) {
-      await fbSignOut(auth)
+      try {
+        await fbSignOut(auth)
+      } catch {
+        /* ignore */
+      }
     }
     this.currentUser = null
     try {
@@ -352,3 +615,4 @@ class AuthManager {
 }
 
 export const authManager = new AuthManager()
+

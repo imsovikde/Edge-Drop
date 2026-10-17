@@ -143,6 +143,12 @@ export interface InvokeMap {
   /** Set encrypted custom Firebase Web SDK configuration. */
   'auth:set-custom-config': { args: [configJson: string]; result: boolean }
 
+  /** Verify and connect a custom Firebase configuration from any format (JSON, JS snippet, .env). */
+  'auth:verify-and-connect': { args: [rawInput: string]; result: { success: boolean; error?: string; config?: import('./types').CustomFirebaseConfig } }
+
+  /** Reset custom Firebase configuration back to build-time defaults. */
+  'auth:reset-custom-config': { args: []; result: boolean }
+
   /** Trigger an immediate synchronization pass. */
   'sync:trigger': { args: []; result: void }
 
