@@ -92,6 +92,7 @@ export class ItemStore {
 
     this.items.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0))
     this.rebuildIndex()
+    this.enforceWorkingSetCap(200)
     this.persist()
     return true
   }
@@ -167,6 +168,7 @@ export class ItemStore {
         }
 
         this.rebuildIndex()
+        this.enforceWorkingSetCap(200)
 
         // Auto-migrate legacy plain JSON: create backup & upgrade to DPAPI encryption
         if (needsMigration || migratedAnyPayloads) {
@@ -325,6 +327,7 @@ export class ItemStore {
     this.sigToId.set(sig, id)
     if (data.kind === 'image') this.writeImageFile(data.imageId)
     this.trim(limit)
+    this.enforceWorkingSetCap(200)
     this.persist()
     this.onMutation?.({ type: 'upsert', item })
     return true
@@ -874,6 +877,52 @@ export class ItemStore {
     return item.data.text
   }
 
+  /**
+   * Kernel-level in-memory working set manager:
+   * When clipboard history grows large, keep full payloads in RAM only for the top
+   * working set (default 200 items + all pinned items). Older unpinned items have their
+   * full payloads evicted to disk (payloads/<id>.txt) with lightweight preview metadata
+   * in RAM, transparently hydrated on demand when clicked or copied via getFullText(id).
+   */
+  public enforceWorkingSetCap(maxWorkingSet = 200): void {
+    let unpinnedSeen = 0
+    for (const it of this.items) {
+      if (it.pinned) continue
+      unpinnedSeen++
+      if (unpinnedSeen > maxWorkingSet && it.data.kind === 'text') {
+        const textData = it.data
+        if (!textData.hasFullPayload) {
+          this.writeTextPayload(it.id, textData.text)
+          textData.hasFullPayload = true
+          textData.previewText = textData.text.slice(0, 300)
+          textData.text = textData.previewText
+        }
+      }
+    }
+  }
+
+  public getMemoryWorkingSetStats(): { total: number; pinned: number; diskBacked: number } {
+    let diskBacked = 0
+    let pinned = 0
+    for (const it of this.items) {
+      if (it.pinned) pinned++
+      if (it.data.kind === 'text' && it.data.hasFullPayload) diskBacked++
+    }
+    return { total: this.items.length, pinned, diskBacked }
+  }
+
+  public getBlob(id: string): Buffer | null {
+    const item = this.items.find((x) => x.id === id)
+    if (!item) return null
+    if (item.data.kind === 'image') {
+      try {
+        const p = this.imagePath(item.data.imageId, item.data.ext || 'png')
+        if (existsSync(p)) return readFileSync(p)
+      } catch { /* ignore */ }
+    }
+    return null
+  }
+
   public deepSearch(query: string, options?: DeepSearchOptions): DeepSearchResult[] {
     const q = (query || '').trim().toLowerCase()
     const max = options?.maxResults ?? 50
@@ -1031,6 +1080,10 @@ export class ItemStore {
   /** Persist a brand-new image captured from the clipboard to its PNG file. */
   stageImageBytes(imageId: string, png: Buffer, ext = 'png'): void {
     try {
+      const dir = PATHS.imagesDir()
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true })
+      }
       writeFileSync(this.imagePath(imageId, ext), png)
     } catch {
       /* ignore */

@@ -10,6 +10,7 @@
  *   - Write-Ahead Log (WAL) & adaptive delta coalescing via AdaptiveGovernor.
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { powerMonitor } from 'electron'
 import { getActiveFirebaseConfig } from './firebaseConfig'
 import { authManager } from './authManager'
 import { adaptiveGovernor, WalEntry } from './adaptiveGovernor'
@@ -18,6 +19,9 @@ import { syncWorker } from './syncWorker'
 import { ClipboardItem, CloudSyncState, CloudSyncStatus, Settings } from '../../shared/types'
 import { getStore, loadSettings, saveSettings, pushState } from '../main/state'
 import { PATHS } from '../store/paths'
+
+const SYNC_INTERVAL_AC_MS = 20_000
+const SYNC_INTERVAL_BATTERY_MS = 300_000
 
 function toFsValue(v: any): any {
   if (v === null || v === undefined) return { nullValue: null }
@@ -91,8 +95,13 @@ class SyncEngine {
   private pollInterval: NodeJS.Timeout | null = null
   private isSyncing = false
   private listeners: Set<(state: CloudSyncState) => void> = new Set()
+  private lastSyncCursor: number = 0
+  private isPowerMonitoring = false
+  private currentIntervalMs = SYNC_INTERVAL_AC_MS
 
   public init(): void {
+    this.setupPowerMonitor()
+
     adaptiveGovernor.init(async (entries) => {
       await this.processWalEntries(entries)
     })
@@ -512,11 +521,19 @@ class SyncEngine {
         let localModified = false
         const remoteIds = new Set<string>()
 
+        const syncStartTime = Date.now()
         for (const docObj of documents) {
           if (!docObj?.fields) continue
           const data = fromFsDoc(docObj.fields)
           if (!data || !data.id) continue
           remoteIds.add(data.id)
+
+          // Kernel delta cursor optimization: if item was updated prior to lastSyncCursor and is already present locally,
+          // skip full payload parsing and blob hydration to minimize CPU and power draw
+          const itemUpdatedAt = data.updatedAt || data.capturedAt || 0
+          if (this.lastSyncCursor > 0 && itemUpdatedAt < this.lastSyncCursor - 3000 && store.hasItem(data.id)) {
+            continue
+          }
 
           if (data.deletedAt) {
             if (store.hasItem(data.id)) {
@@ -590,6 +607,8 @@ class SyncEngine {
           }
         }
 
+        this.lastSyncCursor = syncStartTime
+
         if (localModified) {
           pushState.items()
         }
@@ -599,11 +618,77 @@ class SyncEngine {
     }
   }
 
-  private startBackgroundSync(_userId?: string): void {
+  private setupPowerMonitor(): void {
+    if (this.isPowerMonitoring) return
+    try {
+      if (typeof powerMonitor?.on === 'function') {
+        powerMonitor.on('on-battery', () => {
+          this.rescheduleBackgroundSync(SYNC_INTERVAL_BATTERY_MS)
+        })
+        powerMonitor.on('on-ac', () => {
+          this.rescheduleBackgroundSync(SYNC_INTERVAL_AC_MS)
+          void this.triggerSync()
+        })
+        powerMonitor.on('suspend', () => {
+          this.stopBackgroundSync()
+        })
+        powerMonitor.on('resume', () => {
+          setTimeout(() => {
+            this.rescheduleBackgroundSync()
+            void this.triggerSync()
+          }, 2500)
+        })
+        powerMonitor.on('unlock-screen', () => {
+          void this.triggerSync()
+        })
+        this.isPowerMonitoring = true
+      }
+    } catch {
+      /* ignore when electron powerMonitor is unmocked or in testing */
+    }
+  }
+
+  public getEffectiveIntervalMs(): number {
+    return this.currentIntervalMs
+  }
+
+  public getSyncCursor(): number {
+    return this.lastSyncCursor
+  }
+
+  public setSyncCursor(cursor: number): void {
+    this.lastSyncCursor = cursor
+  }
+
+  public rescheduleBackgroundSync(intervalMs?: number): void {
+    if (intervalMs) {
+      this.currentIntervalMs = intervalMs
+    } else {
+      let onBattery = false
+      try {
+        if (typeof powerMonitor?.isOnBatteryPower === 'function') {
+          onBattery = powerMonitor.isOnBatteryPower()
+        }
+      } catch {
+        /* ignore */
+      }
+      this.currentIntervalMs = onBattery ? SYNC_INTERVAL_BATTERY_MS : SYNC_INTERVAL_AC_MS
+    }
+
+    const user = authManager.getCurrentUser()
+    if (!user) {
+      this.stopBackgroundSync()
+      return
+    }
+
     this.stopBackgroundSync()
     this.pollInterval = setInterval(() => {
       void this.triggerSync()
-    }, 20000)
+    }, this.currentIntervalMs)
+  }
+
+  private startBackgroundSync(_userId?: string): void {
+    this.rescheduleBackgroundSync()
   }
 
   private stopBackgroundSync(): void {
