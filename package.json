@@ -1,7 +1,7 @@
 {
   "name": "edge-drop",
-  "version": "1.3.0",
-  "description": "Edge-Drop — a clipboard manager that lives on the left edge of your screen and expands on hover.",
+  "version": "1.4.0",
+  "description": "Edge-Drop: a zero-click, hover-activated clipboard shelf and desktop file-transfer hub with native OS integration.",
   "author": "Souvik Dey <imsovikde@gmail.com>",
   "repository": {
     "type": "git",
