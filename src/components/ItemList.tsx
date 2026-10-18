@@ -20,6 +20,7 @@ import { ChevronDownIcon, PinFillIcon } from './icons'
 import { playExpandSound, playButtonClickSound } from '../lib/soundEffects'
 
 import { useTranslation } from '../i18n'
+import { BatchActionCapsule } from './BatchActionCapsule'
 
 
 export function ItemList() {
@@ -482,6 +483,7 @@ export function ItemList() {
           </motion.button>
         )}
       </AnimatePresence>
+      <BatchActionCapsule allVisibleIds={visibleItems.map((it) => it.id)} />
     </div>
   )
 }

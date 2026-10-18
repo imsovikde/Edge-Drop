@@ -183,6 +183,17 @@ interface AppState {
   setTutorialStep: (step: number) => void
   edgeTransition: EdgeTransitionState | null
   startEdgeTransition: (to: 'left' | 'right' | 'top') => Promise<void>
+
+  /* multi-selection batch operations */
+  selectedItemIds: string[]
+  isSelectionMode: boolean
+  toggleSelectItem: (id: string) => void
+  selectAllItems: (ids: string[]) => void
+  clearSelection: () => void
+  batchPin: (pinned: boolean) => Promise<void>
+  batchSetColorTag: (colorTag: import('../../shared/types').ColorTag | null) => Promise<void>
+  batchCombineCopy: () => Promise<number>
+  batchDelete: () => Promise<void>
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -287,7 +298,7 @@ export const useStore = create<AppState>((set, get) => ({
   internalDragReq: null,
   toasts: [],
   tutorialStep: 0,
-  currentVersion: '2.5.0',
+  currentVersion: '2.6.0',
   isStoreBuild: false,
   updateInfo: null,
   previewItemId: null,
@@ -302,6 +313,19 @@ export const useStore = create<AppState>((set, get) => ({
   resetPositionChangedTime: () => set({ sliderReleasedTime: 0 }),
   edgeHintActive: false,
   setEdgeHintActive: (active) => set({ edgeHintActive: active }),
+  selectedItemIds: [],
+  isSelectionMode: false,
+  toggleSelectItem: (id) => {
+    const current = get().selectedItemIds
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
+    set({ selectedItemIds: next, isSelectionMode: next.length > 0 })
+  },
+  selectAllItems: (ids) => {
+    set({ selectedItemIds: [...ids], isSelectionMode: ids.length > 0 })
+  },
+  clearSelection: () => {
+    set({ selectedItemIds: [], isSelectionMode: false })
+  },
   styleFlyoutOpen: false,
   styleFlyoutAnchorRect: null,
   setStyleFlyoutOpen: (open, rect) => {
@@ -658,13 +682,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ items: previousItems.filter((it) => it.id !== id) })
     try {
       const items = await edge.deleteItem(id)
-      const current = get().items
-      if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id)) {
-        set({ items })
+      if (Array.isArray(items)) {
+        const current = get().items
+        if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id)) {
+          set({ items })
+        }
       }
     } catch {
-      // Do not leave the UI claiming an item was deleted when the main-process
-      // persistence request failed (for example during a renderer reload).
       set({ items: previousItems })
       get().pushToast({ id: `delete-${Date.now()}`, message: t('toast.deleteFailed'), tone: 'error' })
     }
@@ -676,9 +700,11 @@ export const useStore = create<AppState>((set, get) => ({
       set({ items: previousItems.filter((it) => it.pinned) })
       try {
         const items = await edge.clearItems()
-        const current = get().items
-        if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id)) {
-          set({ items })
+        if (Array.isArray(items)) {
+          const current = get().items
+          if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id)) {
+            set({ items })
+          }
         }
       } catch {
         set({ items: previousItems })
@@ -690,9 +716,11 @@ export const useStore = create<AppState>((set, get) => ({
       set({ items: previousItems.filter((it) => !idSet.has(it.id)) })
       try {
         const items = await edge.deleteBatchItems(ids)
-        const current = get().items
-        if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id)) {
-          set({ items })
+        if (Array.isArray(items)) {
+          const current = get().items
+          if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id)) {
+            set({ items })
+          }
         }
       } catch {
         set({ items: previousItems })
@@ -836,5 +864,65 @@ export const useStore = create<AppState>((set, get) => ({
     // 6. Reset transition state & start stay window from expansion completion
     set({ edgeTransition: null })
     get().notifyPositionChanged()
+  },
+
+  async batchPin(pinned: boolean) {
+    const ids = get().selectedItemIds
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    set({
+      items: get().items.map((it) => (idSet.has(it.id) ? { ...it, pinned } : it))
+    })
+    for (const id of ids) {
+      try {
+        await edge.setPinned(id, pinned)
+      } catch {}
+    }
+  },
+
+  async batchSetColorTag(colorTag) {
+    const ids = get().selectedItemIds
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    set({
+      items: get().items.map((it) => (idSet.has(it.id) ? { ...it, colorTag: colorTag || undefined } : it))
+    })
+    for (const id of ids) {
+      try {
+        await edge.setColorTag(id, colorTag)
+      } catch {}
+    }
+  },
+
+  async batchCombineCopy() {
+    const ids = get().selectedItemIds
+    const idSet = new Set(ids)
+    const selectedItems = get().items.filter((it) => idSet.has(it.id))
+    const texts: string[] = []
+    for (const item of selectedItems) {
+      if (item.data.kind === 'text') {
+        texts.push(item.data.text)
+      } else if (item.data.kind === 'files') {
+        texts.push(item.data.paths.join('\n'))
+      }
+    }
+    if (texts.length === 0) return 0
+    const combined = texts.join('\n\n')
+    try {
+      const nav = (globalThis as unknown as { navigator?: { clipboard?: { writeText?: (t: string) => Promise<void> } } }).navigator
+      if (nav?.clipboard?.writeText) {
+        await nav.clipboard.writeText(combined)
+      }
+    } catch (err) {
+      console.error('Failed to copy combined text', err)
+    }
+    return texts.length
+  },
+
+  async batchDelete() {
+    const ids = get().selectedItemIds
+    if (ids.length === 0) return
+    await get().clear(ids)
+    set({ selectedItemIds: [], isSelectionMode: false })
   }
 }))

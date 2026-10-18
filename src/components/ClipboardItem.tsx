@@ -25,7 +25,7 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName, calculateTextMetrics } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon, WandIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon, WandIcon, CheckIcon } from './icons'
 import { QuickMobileModal } from './QuickMobileModal'
 import { TransformModal } from './TransformModal'
 import { cleanUrl } from '../lib/cleanUrl'
@@ -234,6 +234,8 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const [revealed, setRevealed] = useState(false)
   const [showQrModal, setShowQrModal] = useState(false)
   const [showTransformModal, setShowTransformModal] = useState(false)
+  const isSelectedInBatch = useStore((s) => s.selectedItemIds.includes(item.id))
+  const isSelectionMode = useStore((s) => s.isSelectionMode)
 
   const settings = useStore((s) => s.settings)
   const isHorizontal = settings.stickPosition === 'top'
@@ -522,7 +524,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
         />
       )}
       <div
-        className={`item-main${isPreviewing ? ' force-actions previewing' : ''}${item.colorTag ? ` has-color-tag tag-${item.colorTag}` : ''}`}
+        className={`item-main${isPreviewing ? ' force-actions previewing' : ''}${item.colorTag ? ` has-color-tag tag-${item.colorTag}` : ''}${isSelectedInBatch ? ' batch-selected' : ''}`}
         data-id={item.id}
         draggable={!isPreviewing && item.data.kind !== 'text' && (!isBundle || !expanded)}
         onMouseEnter={handlePrestage}
@@ -605,6 +607,31 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
             {(!isBundle || !expanded) && (
               <div className="item-footer">
                 <div className="meta">
+                  <button
+                    type="button"
+                    className={`item-select-checkbox${isSelectedInBatch ? ' is-selected' : ''}`}
+                    title={isSelectedInBatch ? 'Deselect item' : 'Select item for batch actions'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      playToggleSound(!isSelectedInBatch)
+                      useStore.getState().toggleSelectItem(item.id)
+                    }}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 3,
+                      border: isSelectedInBatch ? '1px solid #818cf8' : '1px solid rgba(255, 255, 255, 0.25)',
+                      background: isSelectedInBatch ? '#6366f1' : 'rgba(255, 255, 255, 0.04)',
+                      display: (isSelectionMode || isSelectedInBatch) ? 'inline-flex' : undefined,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                      flexShrink: 0
+                    }}
+                  >
+                    {isSelectedInBatch && <CheckIcon size={10} style={{ color: '#ffffff' }} />}
+                  </button>
                   {badgeIndex != null && (
                     <span
                       className={`item-quick-badge${altHeld ? ' is-alt-held' : ''}`}
