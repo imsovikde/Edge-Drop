@@ -5,7 +5,7 @@ import { authManager } from '../backup/authManager'
 import { syncEngine } from '../backup/syncEngine'
 
 export function getSystemDiagnostics(): string {
-  let appVersion = '2.4.0'
+  let appVersion = '2.5.0'
   try {
     if (app && typeof app.getVersion === 'function') {
       appVersion = app.getVersion()

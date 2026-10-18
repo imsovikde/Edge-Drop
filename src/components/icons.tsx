@@ -187,4 +187,18 @@ export const QrCodeIcon = (p: P) => {
   )
 }
 
+export const WandIcon = (p: P) => {
+  const { size, width, height, ...rest } = p
+  const s = size ?? width ?? 14
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={height ?? s} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...(rest as any)}>
+      <path d="M15 4l-2 4 4-2-4-2 2 4z" fill="currentColor" />
+      <path d="M3 21l10-10" />
+      <path d="M14 9l3 3" />
+      <path d="M19 15l2 2-2 2-2-2 2-2z" fill="currentColor" />
+      <path d="M9 3l1 2-2 1 1-3z" fill="currentColor" />
+    </svg>
+  )
+}
+
 

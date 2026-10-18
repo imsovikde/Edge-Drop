@@ -25,8 +25,9 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName, calculateTextMetrics } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon, WandIcon } from './icons'
 import { QuickMobileModal } from './QuickMobileModal'
+import { TransformModal } from './TransformModal'
 import { cleanUrl } from '../lib/cleanUrl'
 
 
@@ -232,6 +233,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const [copied, setCopied] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [showQrModal, setShowQrModal] = useState(false)
+  const [showTransformModal, setShowTransformModal] = useState(false)
 
   const settings = useStore((s) => s.settings)
   const isHorizontal = settings.stickPosition === 'top'
@@ -847,6 +849,21 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
               <QrCodeIcon width={12} height={12} />
             </button>
           )}
+          {item.data.kind === 'text' && (
+            <button
+              className="act"
+              title="Transform text & inspect hashes"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                e.currentTarget.blur()
+                playButtonClickSound()
+                setShowTransformModal(true)
+              }}
+            >
+              <WandIcon width={12} height={12} />
+            </button>
+          )}
           <div className="act-divider" />
           <button
             className="act danger"
@@ -868,6 +885,16 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           text={item.data.text}
           isUrl={Boolean(item.data.isUrl)}
           onClose={() => setShowQrModal(false)}
+        />
+      )}
+      {showTransformModal && item.data.kind === 'text' && (
+        <TransformModal
+          itemId={item.id}
+          text={item.data.text}
+          onClose={() => setShowTransformModal(false)}
+          onApplyText={(newText) => {
+            useStore.getState().updateText(item.id, newText)
+          }}
         />
       )}
     </motion.div>
