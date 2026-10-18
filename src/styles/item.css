@@ -201,10 +201,20 @@
   letter-spacing: 0.02em;
 }
 
+.item.is-copied {
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.45), 0 0 20px rgba(16, 185, 129, 0.22) !important;
+  transform: scale(1.012);
+  transition: transform 0.16s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.16s ease;
+}
+
 .meta-copied {
   white-space: nowrap;
   font-weight: 600;
-  color: #ffffff;
+  color: #10b981;
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .meta-time {

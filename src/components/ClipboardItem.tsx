@@ -24,7 +24,7 @@ import { useDragOut } from '../hooks/useDragOut'
 import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
-import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound } from '../lib/soundEffects'
+import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
 import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon } from './icons'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { CodeBlock } from './CodeBlock'
@@ -324,7 +324,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
 
   const onCopy = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    playButtonClickSound()
+    playCopySuccessSound()
     copy(item.id)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 900)
@@ -450,7 +450,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
       transition={adaptiveSpring}
       initial={false}
       animate={{ opacity: 1 }}
-      className={`item${item.pinned ? ' pinned' : ''}${isBundle ? ' bundle' : ''}${expanded ? ' is-expanded' : ''}${colorInfo ? ` is-color-card ${colorInfo.isLight ? 'is-light-color' : 'is-dark-color'}` : ''}${isImageFolderCard || isFileCard ? ' is-image-folder-card' : ''}${isSelected ? ' is-keyboard-selected' : ''}`}
+      className={`item${item.pinned ? ' pinned' : ''}${isBundle ? ' bundle' : ''}${expanded ? ' is-expanded' : ''}${colorInfo ? ` is-color-card ${colorInfo.isLight ? 'is-light-color' : 'is-dark-color'}` : ''}${isImageFolderCard || isFileCard ? ' is-image-folder-card' : ''}${isSelected ? ' is-keyboard-selected' : ''}${copied ? ' is-copied' : ''}`}
       data-id={item.id}
       data-expanded-stack={expanded ? 'true' : undefined}
       style={{
@@ -1397,7 +1397,7 @@ function MiniImageFolderCard({
   const handleCopy = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
     e.currentTarget.blur()
-    playButtonClickSound()
+    playCopySuccessSound()
     if (isImgCol) {
       useStore.getState().copySubitem({ id: item.id, imageId: img.id })
     } else {
@@ -1868,7 +1868,7 @@ function MiniFileFolderCard({
   const handleCopy = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
     e.currentTarget.blur()
-    playButtonClickSound()
+    playCopySuccessSound()
     useStore.getState().copySubitem(subReq)
     setCopied(true)
     setTimeout(() => setCopied(false), 900)

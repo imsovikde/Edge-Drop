@@ -240,13 +240,36 @@ export function CopyIndicatorCurve() {
           style={{
             left: -COPY_TAB_BEHIND_EDGE,
             top: -shape.halfLength,
-            transformOrigin: `${COPY_TAB_BEHIND_EDGE}px ${shape.halfLength}px`
+            transformOrigin: `${COPY_TAB_BEHIND_EDGE}px ${shape.halfLength}px`,
+            filter: 'drop-shadow(0 4px 16px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.08))'
           }}
         >
-          <path d={shape.d} fill="#000000" />
+          <defs>
+            <linearGradient id="copy-tab-surface" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1a1a1a" />
+              <stop offset="50%" stopColor="#111111" />
+              <stop offset="100%" stopColor="#080808" />
+            </linearGradient>
+            <linearGradient id="copy-tab-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgba(255, 255, 255, 0.35)" />
+              <stop offset="60%" stopColor="rgba(255, 255, 255, 0.12)" />
+              <stop offset="100%" stopColor="rgba(255, 255, 255, 0.03)" />
+            </linearGradient>
+          </defs>
+          <path d={shape.d} fill="url(#copy-tab-surface)" stroke="url(#copy-tab-edge)" strokeWidth="1" />
         </svg>
       </div>
       <div className="copy-ind__icon">
+        <div
+          style={{
+            position: 'absolute',
+            inset: -8,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%)',
+            pointerEvents: 'none',
+            zIndex: -1
+          }}
+        />
         {indicatorStyle === 'check' ? (
           <TickIndicatorIcon fillColor="#ffffff" size={26} draw />
         ) : indicatorStyle === 'copy' ? (

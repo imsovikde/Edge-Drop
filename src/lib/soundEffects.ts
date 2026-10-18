@@ -533,3 +533,55 @@ export function playEdgeExpandSound(): void {
 /** Legacy alias for backwards compatibility */
 export const playEdgeTransitionSound = playEdgeRetractSound
 
+/**
+ * Plays a crisp, satisfying obsidian glass-metallic haptic chime upon copy confirmation.
+ */
+export function playCopySuccessSound(): void {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+
+    const play = () => {
+      const now = ctx.currentTime
+
+      // 1. Crystal harmonic chime (1480Hz -> 2200Hz)
+      const chime = ctx.createOscillator()
+      const chimeGain = ctx.createGain()
+      chime.type = 'sine'
+      chime.frequency.setValueAtTime(1480, now)
+      chime.frequency.exponentialRampToValueAtTime(2200, now + 0.04)
+
+      chimeGain.gain.setValueAtTime(0.12, now)
+      chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+
+      chime.connect(chimeGain)
+      chimeGain.connect(ctx.destination)
+      chime.start(now)
+      chime.stop(now + 0.08)
+
+      // 2. Sub-harmonic haptic micro-pop (120Hz -> 50Hz)
+      const pop = ctx.createOscillator()
+      const popGain = ctx.createGain()
+      pop.type = 'triangle'
+      pop.frequency.setValueAtTime(120, now)
+      pop.frequency.exponentialRampToValueAtTime(50, now + 0.035)
+
+      popGain.gain.setValueAtTime(0.15, now)
+      popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035)
+
+      pop.connect(popGain)
+      popGain.connect(ctx.destination)
+      pop.start(now)
+      pop.stop(now + 0.035)
+    }
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => play()).catch(() => {})
+    } else {
+      play()
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
