@@ -230,10 +230,12 @@
   box-sizing: border-box;
 }
 
+.header-search-center .emoji-cat-bar,
+.emoji-cat-bar.horizontal,
 .emoji-picker.horizontal .emoji-cat-bar {
   max-width: 100%;
   width: auto;
-  margin: 0 auto 6px;
+  margin: 0 auto;
   height: 32px;
   background: transparent;
   border: none;
