@@ -20,6 +20,26 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   const [configFeedback, setConfigFeedback] = useState<string | null>(null)
   const [vaultMsg, setVaultMsg] = useState<string | null>(null)
   const [rulesCopied, setRulesCopied] = useState(false)
+  const [isSendingVerification, setIsSendingVerification] = useState(false)
+
+  const handleSendVerificationEmail = async () => {
+    playButtonClickSound()
+    setIsSendingVerification(true)
+    setAuthError(null)
+    setAuthSuccess(null)
+    try {
+      const res = await edge.sendVerificationEmail()
+      if (res.ok) {
+        setAuthSuccess(res.message)
+      } else {
+        setAuthError(res.message)
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Failed to send verification email')
+    } finally {
+      setIsSendingVerification(false)
+    }
+  }
 
   // ── Keyboard Focus Engagement (WS_EX_NOACTIVATE Window Unlock) ─────────
   const inputEngagedRef = useRef(false)
@@ -370,6 +390,30 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
               <div className="vault-card-desc">
                 Provider: {firebaseUser.providerId || 'firebase'} • UID: {firebaseUser.uid.slice(0, 14)}...
               </div>
+              {!firebaseUser.isAnonymous && firebaseUser.email && (
+                <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  {firebaseUser.emailVerified ? (
+                    <span style={{ fontSize: '11px', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
+                      ✓ Email Verified
+                    </span>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '11px', color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        ⚠ Email Unverified
+                      </span>
+                      <button
+                        type="button"
+                        className="vault-btn-secondary"
+                        style={{ padding: '3px 8px', fontSize: '11px', height: 'auto', minHeight: 'unset' }}
+                        onClick={handleSendVerificationEmail}
+                        disabled={isSendingVerification}
+                      >
+                        {isSendingVerification ? 'Sending...' : 'Resend Verification Email'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             <button
               type="button"
