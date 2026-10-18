@@ -3062,3 +3062,61 @@
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
 }
+
+/* Keyboard selection focus ring */
+.item.is-keyboard-selected {
+  outline: none;
+  background: var(--bg-card-hover) !important;
+  box-shadow: 0 0 0 1.5px var(--accent, #3b82f6), 0 4px 20px rgba(0, 0, 0, 0.55) !important;
+}
+
+.item.is-keyboard-selected::before {
+  opacity: 1.5 !important;
+}
+
+/* Quick-paste Hotkey Index Badge */
+.item-quick-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3.5px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: calc(9.5px * var(--font-scale, 1));
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  pointer-events: none;
+  flex-shrink: 0;
+  margin-right: 3px;
+}
+
+.item:hover .item-quick-badge,
+.item.is-keyboard-selected .item-quick-badge {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.item-quick-badge.is-alt-held {
+  color: #000000 !important;
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45);
+  transform: scale(1.15);
+}
+
+.shimmer-image-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

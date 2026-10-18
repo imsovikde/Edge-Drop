@@ -42,6 +42,66 @@ export const RelativeTime = memo(function RelativeTime({ capturedAt }: { capture
 
 interface Props {
   item: ClipboardItemDto
+  index?: number
+  isSelected?: boolean
+  altHeld?: boolean
+}
+
+/**
+ * ShimmerImage — displays a smooth shimmering skeleton during asset hydration
+ * and decodes smoothly with zero layout pop-in.
+ */
+export function ShimmerImage({
+  src,
+  fallbackSrc,
+  className,
+  alt = '',
+  draggable = false,
+  style
+}: {
+  src?: string
+  fallbackSrc?: string
+  className?: string
+  alt?: string
+  draggable?: boolean
+  style?: React.CSSProperties
+}) {
+  const [loaded, setLoaded] = useState(false)
+  const [imgSrc, setImgSrc] = useState(src || fallbackSrc)
+
+  useEffect(() => {
+    setImgSrc(src || fallbackSrc)
+    setLoaded(false)
+  }, [src, fallbackSrc])
+
+  return (
+    <div className="shimmer-image-wrap">
+      {!loaded && <div className="card-shimmer-skeleton" />}
+      {imgSrc ? (
+        <img
+          src={imgSrc}
+          className={`${className || ''} ${loaded ? 'is-loaded' : 'is-loading'}`}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          draggable={draggable}
+          style={{
+            ...style,
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            if (fallbackSrc && imgSrc !== fallbackSrc) {
+              setImgSrc(fallbackSrc)
+            } else {
+              setLoaded(true)
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  )
 }
 
 /**
@@ -58,7 +118,8 @@ export function fileStreamUrl(filePath: string): string {
 /* Main item card                                                      */
 /* ------------------------------------------------------------------ */
 
-const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item }, ref) => {
+const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSelected, altHeld }, ref) => {
+  const badgeIndex = typeof index === 'number' && index < 9 ? index + 1 : undefined
   const { t } = useTranslation()
   const copy = useStore.getState().copy
   const paste = useStore.getState().paste
@@ -291,7 +352,8 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item }, ref) => {
       }}
       initial={false}
       animate={{ opacity: 1 }}
-      className={`item${item.pinned ? ' pinned' : ''}${isBundle ? ' bundle' : ''}${expanded ? ' is-expanded' : ''}${colorInfo ? ` is-color-card ${colorInfo.isLight ? 'is-light-color' : 'is-dark-color'}` : ''}${isImageFolderCard || isFileCard ? ' is-image-folder-card' : ''}`}
+      className={`item${item.pinned ? ' pinned' : ''}${isBundle ? ' bundle' : ''}${expanded ? ' is-expanded' : ''}${colorInfo ? ` is-color-card ${colorInfo.isLight ? 'is-light-color' : 'is-dark-color'}` : ''}${isImageFolderCard || isFileCard ? ' is-image-folder-card' : ''}${isSelected ? ' is-keyboard-selected' : ''}`}
+      data-id={item.id}
       data-expanded-stack={expanded ? 'true' : undefined}
       style={{
         ...(expandedWidth ? { width: expandedWidth, minWidth: expandedWidth, maxWidth: expandedWidth } : {}),
@@ -367,6 +429,8 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item }, ref) => {
             onCopy={onCopy}
             onRemove={() => remove(item.id)}
             onCollapse={onCollapse}
+            badgeIndex={badgeIndex}
+            altHeld={altHeld}
           />
         ) : isFileCard ? (
           <FileFolderCard
@@ -378,6 +442,8 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item }, ref) => {
             onCopy={onCopy}
             onRemove={() => remove(item.id)}
             onCollapse={onCollapse}
+            badgeIndex={badgeIndex}
+            altHeld={altHeld}
           />
         ) : (
           <div className="body">
@@ -399,6 +465,14 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item }, ref) => {
             {(!isBundle || !expanded) && (
               <div className="item-footer">
                 <div className="meta">
+                  {badgeIndex != null && (
+                    <span
+                      className={`item-quick-badge${altHeld ? ' is-alt-held' : ''}`}
+                      title={`Quick paste: press ${badgeIndex} or Alt+${badgeIndex}`}
+                    >
+                      {badgeIndex}
+                    </span>
+                  )}
                   <KindBadge item={item} />
                   <ItemDetails item={item} />
                   {item.hitCount > 1 && (
@@ -1355,7 +1429,9 @@ function ImageFolderCard({
   onDragStart,
   onCopy,
   onRemove,
-  onCollapse
+  onCollapse,
+  badgeIndex,
+  altHeld
 }: {
   item: ClipboardItemDto
   copied?: boolean
@@ -1365,6 +1441,8 @@ function ImageFolderCard({
   onCopy?: (e: React.MouseEvent) => void
   onRemove?: () => void
   onCollapse?: (e?: React.MouseEvent) => void
+  badgeIndex?: number
+  altHeld?: boolean
 }) {
   const { t } = useTranslation()
   const isPreviewing = useStore((s) => s.previewItemId) === item.id
@@ -1400,17 +1478,11 @@ function ImageFolderCard({
       <div className={`image-folder-viewport${expanded && isStack ? ' is-expanded-viewport' : ''}`}>
         {!isStack ? (
           displayImages[0].src ? (
-            <img
+            <ShimmerImage
               className="image-folder-thumb"
               src={displayImages[0].src}
-              onError={(e) => {
-                if (displayImages[0].fallbackSrc && e.currentTarget.src !== displayImages[0].fallbackSrc) {
-                  e.currentTarget.src = displayImages[0].fallbackSrc
-                }
-              }}
+              fallbackSrc={displayImages[0].fallbackSrc}
               alt=""
-              loading="lazy"
-              decoding="async"
               draggable={false}
             />
           ) : (
@@ -1428,16 +1500,10 @@ function ImageFolderCard({
                 key={img.id}
                 className={`image-folder-stack-item pos-${idx}`}
               >
-                <img
+                <ShimmerImage
                   src={img.src}
-                  onError={(e) => {
-                    if (img.fallbackSrc && e.currentTarget.src !== img.fallbackSrc) {
-                      e.currentTarget.src = img.fallbackSrc
-                    }
-                  }}
+                  fallbackSrc={img.fallbackSrc}
                   alt=""
-                  loading="lazy"
-                  decoding="async"
                   draggable={false}
                 />
               </div>
@@ -1578,6 +1644,14 @@ function ImageFolderCard({
           <div className="image-folder-flap-content">
             {/* Elevated Tab Area: shows type badge (image, 3 images, etc.) */}
             <div className="image-folder-flap-header">
+              {badgeIndex != null && (
+                <span
+                  className={`item-quick-badge${altHeld ? ' is-alt-held' : ''}`}
+                  title={`Quick paste: press ${badgeIndex} or Alt+${badgeIndex}`}
+                >
+                  {badgeIndex}
+                </span>
+              )}
               <span className="kind-badge file-elevated-badge" style={{ color: '#06B6D4' }}>
                 {badgeText}
               </span>
@@ -1830,7 +1904,9 @@ function FileFolderCard({
   onDragStart,
   onCopy,
   onRemove,
-  onCollapse
+  onCollapse,
+  badgeIndex,
+  altHeld
 }: {
   item: ClipboardItemDto
   copied?: boolean
@@ -1840,6 +1916,8 @@ function FileFolderCard({
   onCopy?: (e: React.MouseEvent) => void
   onRemove?: () => void
   onCollapse?: (e?: React.MouseEvent) => void
+  badgeIndex?: number
+  altHeld?: boolean
 }) {
   const { t } = useTranslation()
   const isPreviewing = useStore((s) => s.previewItemId) === item.id
@@ -1862,18 +1940,11 @@ function FileFolderCard({
       <div className={`image-folder-viewport${expanded && isStack ? ' is-expanded-viewport' : ''}`}>
         {!isStack ? (
           (!entry?.isDirectory && (entry?.isImage || info.kind === 'image')) ? (
-            <img
+            <ShimmerImage
               className="image-folder-thumb"
               src={entry?.preview || `edgelocal://file/${encodeURIComponent(first.replace(/\\/g, '/'))}`}
-              onError={(e) => {
-                const fallback = `edgelocal://file/${encodeURIComponent(first.replace(/\\/g, '/'))}`
-                if (e.currentTarget.src !== fallback) {
-                  e.currentTarget.src = fallback
-                }
-              }}
+              fallbackSrc={`edgelocal://file/${encodeURIComponent(first.replace(/\\/g, '/'))}`}
               alt=""
-              loading="lazy"
-              decoding="async"
               draggable={false}
             />
           ) : (
@@ -1901,17 +1972,10 @@ function FileFolderCard({
                   style={{ color: fileInfo.color }}
                 >
                   {isImg ? (
-                    <img
+                    <ShimmerImage
                       src={imgSrc}
-                      onError={(e) => {
-                        const fallback = `edgelocal://file/${encodeURIComponent(filePath.replace(/\\/g, '/'))}`
-                        if (e.currentTarget.src !== fallback) {
-                          e.currentTarget.src = fallback
-                        }
-                      }}
+                      fallbackSrc={`edgelocal://file/${encodeURIComponent(filePath.replace(/\\/g, '/'))}`}
                       alt=""
-                      loading="lazy"
-                      decoding="async"
                       draggable={false}
                     />
                   ) : (
@@ -2058,6 +2122,14 @@ function FileFolderCard({
           <div className="image-folder-flap-content">
             {/* Elevated Tab Area: shows type badge (pdf, folder, doc, 3 files, etc.) */}
             <div className="image-folder-flap-header">
+              {badgeIndex != null && (
+                <span
+                  className={`item-quick-badge${altHeld ? ' is-alt-held' : ''}`}
+                  title={`Quick paste: press ${badgeIndex} or Alt+${badgeIndex}`}
+                >
+                  {badgeIndex}
+                </span>
+              )}
               <span className="kind-badge file-elevated-badge" style={{ color: badgeColor }}>
                 {label}
               </span>

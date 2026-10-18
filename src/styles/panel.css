@@ -376,7 +376,7 @@
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 2px var(--pad) 4px;
+  padding: 4px var(--pad) 20px;
   position: relative;
   z-index: 1;
   scrollbar-width: none; /* Firefox */
@@ -1209,5 +1209,31 @@
 .copy-ind.is-reduced .tick-draw {
   stroke-dashoffset: 0;
   transition: none;
+}
+
+/* Card Asset Hydration Shimmer Skeleton */
+.card-shimmer-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  background-size: 200% 100%;
+  animation: card-shimmer-sweep 1.4s ease-in-out infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+@keyframes card-shimmer-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 

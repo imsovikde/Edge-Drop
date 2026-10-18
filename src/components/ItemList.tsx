@@ -9,9 +9,11 @@
  * dragged over the panel so the edge-hover hook knows not to close mid-drag.
  */
 import { AnimatePresence, motion } from 'framer-motion'
-import { useRef, useEffect, useLayoutEffect, useState } from 'react'
+import { useRef, useEffect, useLayoutEffect, useState, useMemo } from 'react'
 import { useStore } from '../store/appStore'
 import { useFilteredItems } from '../hooks/useFilteredItems'
+import { useShelfKeyboardNav } from '../hooks/useShelfKeyboardNav'
+import { tryPaste } from '../lib/tryPaste'
 import { ClipboardItemCard } from './ClipboardItem'
 import { EmptyState } from './EmptyState'
 import { ChevronDownIcon, PinFillIcon } from './icons'
@@ -31,6 +33,10 @@ export function ItemList() {
   const isDraggingAny = useStore((s) => !!s.dragActive || !!s.internalDragReq)
   const settings = useStore((s) => s.settings)
   const isHorizontal = settings.stickPosition === 'top'
+  const paste = useStore((s) => s.paste)
+  const togglePin = useStore((s) => s.togglePin)
+  const remove = useStore((s) => s.remove)
+  const open = useStore((s) => s.open)
   
   const typeFilter = useStore((s) => s.typeFilter) || 'all'
   const filterScrollMap = useRef<Record<string, { top: number; left: number }>>({})
@@ -54,6 +60,20 @@ export function ItemList() {
       return next
     })
   }
+
+  const visibleItems = useMemo(() => {
+    return pinnedCollapsed ? recent : [...pinned, ...recent]
+  }, [pinnedCollapsed, pinned, recent])
+
+  const { selectedItemIndex, altHeld } = useShelfKeyboardNav({
+    visibleItems,
+    isHorizontal,
+    onPaste: (id) => tryPaste(() => paste(id)),
+    onTogglePin: (id, pin) => togglePin(id, pin),
+    onRemove: (id) => remove(id),
+    open,
+    containerRef: listRef
+  })
   
   const topRecentId = recent[0]?.id
   const topRecentTime = recent[0]?.capturedAt
@@ -369,9 +389,20 @@ export function ItemList() {
                 }
               >
                 <div className="pinned-accordion-inner">
-                  {pinned.map((it) => (
-                    <ClipboardItemCard key={it.id} item={it} />
-                  ))}
+                  {pinned.map((it, idx) => {
+                    const globalIdx = idx
+                    const isSelected = !pinnedCollapsed && selectedItemIndex === globalIdx
+                    const badgeIndex = !pinnedCollapsed && globalIdx < 9 ? globalIdx + 1 : undefined
+                    return (
+                      <ClipboardItemCard
+                        key={it.id}
+                        item={it}
+                        index={badgeIndex ? badgeIndex - 1 : undefined}
+                        isSelected={isSelected}
+                        altHeld={altHeld}
+                      />
+                    )
+                  })}
                 </div>
               </div>
               <button
@@ -408,9 +439,20 @@ export function ItemList() {
                   <span className="recent-label-text">{t('item.recent')}</span>
                 </div>
               )}
-              {recent.map((it) => (
-                <ClipboardItemCard key={it.id} item={it} />
-              ))}
+              {recent.map((it, idx) => {
+                const globalIdx = pinnedCollapsed ? idx : pinned.length + idx
+                const isSelected = selectedItemIndex === globalIdx
+                const badgeIndex = globalIdx < 9 ? globalIdx + 1 : undefined
+                return (
+                  <ClipboardItemCard
+                    key={it.id}
+                    item={it}
+                    index={badgeIndex ? badgeIndex - 1 : undefined}
+                    isSelected={isSelected}
+                    altHeld={altHeld}
+                  />
+                )
+              })}
             </section>
           )}
         </motion.div>
