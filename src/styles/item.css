@@ -106,12 +106,13 @@
   width: 100%;
   position: relative;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .item:not(.is-expanded) .item-main:active {
-  transform: scale(0.985);
-  transition: transform 0.08s ease;
+  transform: scale(0.978);
+  transition: transform 0.038s cubic-bezier(0, 0, 0.2, 1);
+  will-change: transform;
 }
 
 .item.is-expanded .item-main:active,

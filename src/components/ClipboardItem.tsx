@@ -34,6 +34,7 @@ import { tryPaste } from '../lib/tryPaste'
 import { parseColor } from '../lib/colorUtils'
 import { useTranslation, t } from '../i18n'
 import { useRelativeTimeTick } from '../hooks/useRelativeTimeTick'
+import { useAdaptiveSpring } from '../hooks/useAdaptiveSpring'
 
 export const RelativeTime = memo(function RelativeTime({ capturedAt }: { capturedAt: number }) {
   useRelativeTimeTick()
@@ -221,6 +222,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const remove = useStore.getState().remove
   const setInternalDragReq = useStore.getState().setInternalDragReq
   const startDrag = useDragOut()
+  const adaptiveSpring = useAdaptiveSpring()
   const [copied, setCopied] = useState(false)
 
   const settings = useStore((s) => s.settings)
@@ -444,6 +446,8 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
         if (typeof ref === 'function') ref(node)
         else if (ref) (ref as any).current = node
       }}
+      layout="position"
+      transition={adaptiveSpring}
       initial={false}
       animate={{ opacity: 1 }}
       className={`item${item.pinned ? ' pinned' : ''}${isBundle ? ' bundle' : ''}${expanded ? ' is-expanded' : ''}${colorInfo ? ` is-color-card ${colorInfo.isLight ? 'is-light-color' : 'is-dark-color'}` : ''}${isImageFolderCard || isFileCard ? ' is-image-folder-card' : ''}${isSelected ? ' is-keyboard-selected' : ''}`}

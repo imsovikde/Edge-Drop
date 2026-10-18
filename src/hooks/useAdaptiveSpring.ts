@@ -25,8 +25,8 @@ export function useAdaptiveSpring() {
         stiffness: 520,
         damping: 42,
         mass: 0.5,
-        restDelta: 0.4,
-        restSpeed: 10
+        restDelta: 0.2,
+        restSpeed: 8
       } as const
     }
 
@@ -35,8 +35,8 @@ export function useAdaptiveSpring() {
       stiffness: 480,
       damping: 40,
       mass: 0.5,
-      restDelta: 0.4,
-      restSpeed: 10
+      restDelta: 0.2,
+      restSpeed: 8
     } as const
   }, [])
 }
@@ -55,8 +55,8 @@ export function useSubtleSpring() {
       stiffness: 480,
       damping: 40,
       mass: 0.5,
-      restDelta: 0.4,
-      restSpeed: 10
+      restDelta: 0.2,
+      restSpeed: 8
     } as const
   }, [])
 }
