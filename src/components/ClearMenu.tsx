@@ -5,6 +5,8 @@ import { playButtonClickSound } from '../lib/soundEffects'
 import { useTranslation } from '../i18n'
 import type { ClipboardItemDto } from '../../shared/types'
 import { SlideCommit } from './SlideCommit'
+import { exportClipboardArchive } from '../lib/exportUtils'
+
 
 interface ClearMenuProps {
   /** Full item list (pinned + recent) to compute time-window ids from. */
@@ -285,7 +287,45 @@ export function ClearMenu({
               </div>
             )}
 
+            <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }} />
+
+            <div style={{ padding: '3px 10px 2px 10px', fontSize: 10, fontWeight: 600, color: 'rgba(255, 255, 255, 0.4)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Export Archive
+            </div>
+
+            <div style={{ display: 'flex', gap: 4, padding: '2px 6px' }}>
+              {(['md', 'json', 'txt'] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => {
+                    playButtonClickSound()
+                    exportClipboardArchive(items, fmt)
+                    setOpen(false)
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '5px 0',
+                    borderRadius: 6,
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    color: '#93c5fd',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    transition: 'all 0.12s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(96, 165, 250, 0.15)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)' }}
+                >
+                  .{fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+
             <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.1)', margin: '4px 2px' }} />
+
 
             {confirmAll ? (
               <div style={{ padding: '3px 4px' }}>

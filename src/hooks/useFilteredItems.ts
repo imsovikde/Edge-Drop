@@ -9,23 +9,107 @@ import { useStore } from '../store/appStore'
 import type { ClipboardItemDto, TypeFilter } from '../../shared/types'
 import { basename, isImagePath } from '../lib/format'
 import { parseColor } from '../lib/colorUtils'
+import { detectSensitiveToken } from '../lib/securityDetector'
+import { hasMacroTokens } from '../lib/macroEngine'
+import { detectCode } from '../lib/codeDetect'
 
-function matches(it: ClipboardItemDto, q: string): boolean {
-  if (!q) return true
-  const needle = q.toLowerCase()
-  switch (it.data.kind) {
-    case 'text':
-      return it.data.text.toLowerCase().includes(needle)
-    case 'files':
-      return it.data.paths.some((p) => basename(p).toLowerCase().includes(needle))
-    case 'image':
-      // images have no searchable text; hidden by query
-      return false
-    case 'image-collection':
-      // image collections have no searchable text; hidden by query
-      return false
-  }
+export interface ParsedSearchQuery {
+  operators: { key: string; val: string }[]
+  terms: string[]
 }
+
+/**
+ * Parses search strings into smart operator tokens (e.g. is:pinned, is:link, is:code, tag:ruby)
+ * and free-text search terms.
+ */
+export function parseSearchQuery(query: string): ParsedSearchQuery {
+  if (!query) return { operators: [], terms: [] }
+  const tokens = query.trim().split(/\s+/).filter(Boolean)
+  const operators: { key: string; val: string }[] = []
+  const terms: string[] = []
+
+  for (const token of tokens) {
+    const colonIdx = token.indexOf(':')
+    if (colonIdx > 0 && colonIdx < token.length - 1) {
+      const key = token.slice(0, colonIdx).toLowerCase()
+      const val = token.slice(colonIdx + 1).toLowerCase()
+      operators.push({ key, val })
+    } else {
+      terms.push(token.toLowerCase())
+    }
+  }
+
+  return { operators, terms }
+}
+
+/**
+ * Matches an item against smart operators (is:pinned, is:link, is:image, is:code, is:secret, tag:ruby)
+ * and text search terms.
+ */
+export function matchesSmartQuery(it: ClipboardItemDto, parsed: ParsedSearchQuery): boolean {
+  const { operators, terms } = parsed
+
+  // Evaluate operator constraints
+  for (const { key, val } of operators) {
+    if (key === 'is') {
+      if (val === 'pin' || val === 'pinned') {
+        if (!it.pinned) return false
+      } else if (val === 'unpin' || val === 'unpinned') {
+        if (it.pinned) return false
+      } else if (val === 'url' || val === 'link') {
+        if (it.data.kind !== 'text' || !it.data.isUrl) return false
+      } else if (val === 'img' || val === 'image') {
+        if (it.data.kind !== 'image' && it.data.kind !== 'image-collection' && !isImageOnlyFileItem(it)) return false
+      } else if (val === 'file' || val === 'files') {
+        if (it.data.kind !== 'files' || isImageOnlyFileItem(it)) return false
+      } else if (val === 'color' || val === 'colour') {
+        if (it.data.kind !== 'text' || (!it.data.isColor && !parseColor(it.data.text))) return false
+      } else if (val === 'code') {
+        if (it.data.kind !== 'text' || !detectCode(it.data.text).isCode) return false
+      } else if (val === 'secret' || val === 'token') {
+        if (it.data.kind !== 'text' || !detectSensitiveToken(it.data.text).isSensitive) return false
+      } else if (val === 'macro') {
+        if (it.data.kind !== 'text' || !hasMacroTokens(it.data.text)) return false
+      }
+    } else if (key === 'tag') {
+      if (val === 'any') {
+        if (!it.colorTag) return false
+      } else {
+        if (!it.colorTag || it.colorTag.toLowerCase() !== val) return false
+      }
+    } else if (key === 'has') {
+      if (val === 'tag') {
+        if (!it.colorTag) return false
+      }
+    }
+  }
+
+  // If there are no terms, all operator constraints matched
+  if (terms.length === 0) return true
+
+  // Evaluate text terms against item contents
+  return terms.every((term) => {
+    switch (it.data.kind) {
+      case 'text':
+        return it.data.text.toLowerCase().includes(term)
+      case 'files':
+        return it.data.paths.some((p) => basename(p).toLowerCase().includes(term))
+      case 'image': {
+        const name = it.data.fileName || it.data.imageId || 'image'
+        return name.toLowerCase().includes(term)
+      }
+      case 'image-collection':
+        return it.data.images.some((img) => (img.fileName || img.imageId || 'image').toLowerCase().includes(term))
+    }
+  })
+}
+
+
+export function matches(it: ClipboardItemDto, q: string): boolean {
+  if (!q) return true
+  return matchesSmartQuery(it, parseSearchQuery(q))
+}
+
 
 /**
  * Explorer-copied photos are stored as `files` but belong in Images, not Files.
@@ -106,15 +190,17 @@ export function useFilteredItems(): GroupedItems {
     })
 
     const trimmedQuery = query.trim()
+    const parsedQuery = parseSearchQuery(trimmedQuery)
 
     for (const it of filteredByTutorial) {
       if (timeCutoff > 0 && it.capturedAt < timeCutoff) continue
 
       if (deepSearchActive && trimmedQuery) {
         if (!deepSearchResults[it.id]) continue
-      } else {
-        if (!matches(it, trimmedQuery)) continue
+      } else if (trimmedQuery) {
+        if (!matchesSmartQuery(it, parsedQuery)) continue
       }
+
 
       if (!itemMatchesTypeFilter(it, typeFilter)) continue
       if (activeTagFilter && activeTagFilter !== 'all') {
