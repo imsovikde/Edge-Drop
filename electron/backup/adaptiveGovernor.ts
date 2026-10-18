@@ -30,16 +30,22 @@ function getWalPath(): string {
   }
 }
 
+export interface SyncResult {
+  succeededIds: string[]
+  failedIds?: string[]
+  error?: string
+}
+
 class AdaptiveGovernor {
   private dirtyItems: Map<string, WalEntry> = new Map()
   private settingsDirty: WalEntry | null = null
   private coalesceTimer: NodeJS.Timeout | null = null
   private isOnBattery = false
   private isSuspended = false
-  private syncCallback: ((entries: WalEntry[]) => Promise<void>) | null = null
+  private syncCallback: ((entries: WalEntry[]) => Promise<void | SyncResult>) | null = null
   private isFlushing = false
 
-  public init(syncCb: (entries: WalEntry[]) => Promise<void>): void {
+  public init(syncCb: (entries: WalEntry[]) => Promise<void | SyncResult>): void {
     this.syncCallback = syncCb
     this.loadWal()
     this.initPowerMonitor()
@@ -186,29 +192,87 @@ class AdaptiveGovernor {
 
     this.isFlushing = true
     try {
-      await this.syncCallback(entriesToFlush)
-
-      // Upon success, clear processed entries
-      for (const e of entriesToFlush) {
-        if (e.action === 'settings') {
-          if (this.settingsDirty === e) this.settingsDirty = null
-        } else {
-          if (this.dirtyItems.get(e.id) === e) {
-            this.dirtyItems.delete(e.id)
+      const res = await this.syncCallback(entriesToFlush)
+      if (res && Array.isArray(res.succeededIds)) {
+        for (const id of res.succeededIds) {
+          if (id === 'settings') {
+            this.settingsDirty = null
+          } else {
+            this.dirtyItems.delete(id)
           }
         }
+        if (Array.isArray(res.failedIds)) {
+          for (const id of res.failedIds) {
+            const entry = id === 'settings' ? this.settingsDirty : this.dirtyItems.get(id)
+            if (entry) {
+              entry.retryCount++
+              if (entry.retryCount >= 5) {
+                console.warn(`[AdaptiveGovernor] Quarantining failed entry ${id} after 5 retries`)
+                if (id === 'settings') this.settingsDirty = null
+                else this.dirtyItems.delete(id)
+              }
+            }
+          }
+        }
+        this.persistWal()
+        if (res.error && res.failedIds && res.failedIds.length > 0) {
+          throw new Error(res.error)
+        }
+      } else {
+        // Fallback for full-batch success
+        for (const e of entriesToFlush) {
+          if (e.action === 'settings') {
+            if (this.settingsDirty === e) this.settingsDirty = null
+          } else {
+            if (this.dirtyItems.get(e.id) === e) {
+              this.dirtyItems.delete(e.id)
+            }
+          }
+        }
+        this.persistWal()
       }
-      this.persistWal()
     } catch (err) {
-      // Increment retry count for exponential backoff
+      // Increment retry count for exponential backoff, quarantining items that permanently fail
       for (const e of entriesToFlush) {
         e.retryCount++
+        if (e.retryCount >= 5) {
+          console.warn(`[AdaptiveGovernor] Quarantining failed entry ${e.id} after 5 retries`)
+          if (e.action === 'settings') this.settingsDirty = null
+          else this.dirtyItems.delete(e.id)
+        }
       }
       this.persistWal()
       throw err
     } finally {
       this.isFlushing = false
     }
+  }
+
+  public acknowledgeSuccess(ids: string[]): void {
+    let changed = false
+    for (const id of ids) {
+      if (id === 'settings') {
+        if (this.settingsDirty) {
+          this.settingsDirty = null
+          changed = true
+        }
+      } else if (this.dirtyItems.has(id)) {
+        this.dirtyItems.delete(id)
+        changed = true
+      }
+    }
+    if (changed) {
+      this.persistWal()
+    }
+  }
+
+  public quarantineItem(id: string): void {
+    if (id === 'settings') {
+      this.settingsDirty = null
+    } else {
+      this.dirtyItems.delete(id)
+    }
+    this.persistWal()
   }
 
   public getPendingCount(): number {

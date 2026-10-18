@@ -435,22 +435,22 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   }
 
   // Status Beacon Calculation
-  const isSyncing = cloudSyncState?.status === 'syncing' || isSubmitting
-  const isError = cloudSyncState?.status === 'error' || !!authError
+  const isError = cloudSyncState?.status === 'error' || !!authError || !!cloudSyncState?.error
+  const isSyncing = !isError && (cloudSyncState?.status === 'syncing' || isSubmitting)
   const isConnected = !!firebaseUser
 
-  const statusBeaconColor = isSyncing
-    ? '#ffb300'
-    : isError
-      ? '#f44336'
+  const statusBeaconColor = isError
+    ? '#f44336'
+    : isSyncing
+      ? '#ffb300'
       : isConnected
         ? '#10b981'
         : '#3b82f6'
 
-  const statusText = isSyncing
-    ? 'Syncing in progress...'
-    : isError
-      ? 'Sync error or offline'
+  const statusText = isError
+    ? cloudSyncState?.error ? `Sync Alert: ${cloudSyncState.error}` : (authError || 'Sync error or offline')
+    : isSyncing
+      ? 'Syncing in progress...'
       : isConnected
         ? firebaseUser.isAnonymous
           ? 'Guest Vault Active'
@@ -492,6 +492,23 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                 ? 'Clipboard clips, images, and stacks are automatically synced.'
                 : 'Connect an account to enable automatic multi-device sync.'}
             </div>
+            {cloudSyncState?.error && (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: '5px 8px',
+                  borderRadius: 6,
+                  background: 'rgba(244, 67, 54, 0.12)',
+                  border: '1px solid rgba(244, 67, 54, 0.25)',
+                  color: '#ff8a80',
+                  fontSize: 10,
+                  lineHeight: 1.3,
+                  wordBreak: 'break-word'
+                }}
+              >
+                {cloudSyncState.error}
+              </div>
+            )}
           </div>
           <div className="shelf-card-bottom">
             {isConnected ? (
@@ -843,6 +860,23 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
               {cloudSyncState.pendingMutations} pending item(s) in offline write-ahead log
             </div>
           ) : null}
+          {cloudSyncState?.error && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '6px 10px',
+                borderRadius: 8,
+                background: 'rgba(244, 67, 54, 0.12)',
+                border: '1px solid rgba(244, 67, 54, 0.25)',
+                color: '#ff8a80',
+                fontSize: 11,
+                lineHeight: 1.35,
+                wordBreak: 'break-word'
+              }}
+            >
+              {cloudSyncState.error}
+            </div>
+          )}
         </div>
 
         <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
@@ -870,6 +904,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
             <button
               type="button"
               className={`pill ${showTelemetry ? 'active' : ''}`}
+              style={{ minWidth: 'max-content', whiteSpace: 'nowrap' }}
               onClick={() => {
                 playButtonClickSound()
                 setShowTelemetry(!showTelemetry)
@@ -896,7 +931,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                 <div className="vault-telemetry-cell">
                   <span className="vault-telemetry-label">Latency</span>
                   <span className="vault-telemetry-val">
-                    {cloudSyncState?.latencyMs !== undefined ? `${cloudSyncState.latencyMs} ms` : '—'}
+                    {cloudSyncState?.latencyMs !== undefined ? `${cloudSyncState.latencyMs} ms` : '-'}
                   </span>
                 </div>
                 <div className="vault-telemetry-cell">

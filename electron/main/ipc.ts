@@ -401,18 +401,22 @@ export function registerIpc(): void {
 
   handle('item:set-pinned', (id, pinned) => {
     getStore().setPinned(id, pinned)
+    pushState.items()
+    void syncEngine.triggerSync()
     return getStore().toDto()
   })
 
   handle('item:set-color-tag', (id, colorTag) => {
     const dtos = getStore().setColorTag(id, colorTag)
     pushState.items()
+    void syncEngine.triggerSync()
     return dtos
   })
 
   handle('item:set-tags', (id, tags) => {
     const dtos = getStore().setTags(id, tags)
     pushState.items()
+    void syncEngine.triggerSync()
     return dtos
   })
 

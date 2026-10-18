@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { powerMonitor } from 'electron'
 import { getActiveFirebaseConfig } from './firebaseConfig'
 import { authManager } from './authManager'
-import { adaptiveGovernor, WalEntry } from './adaptiveGovernor'
+import { adaptiveGovernor, WalEntry, type SyncResult } from './adaptiveGovernor'
 import { atomicWriteFileSync, computeSha256, sanitizeSafePath } from './cryptoIntegrity'
 import { syncWorker } from './syncWorker'
 import { ClipboardItem, CloudSyncState, CloudSyncStatus, Settings } from '../../shared/types'
@@ -85,6 +85,31 @@ function fromFsDoc(fields: Record<string, any>): Record<string, any> {
   return res
 }
 
+function extractFriendlyFirestoreError(status: number, rawText: string): string {
+  if (status === 403) {
+    return 'Permission denied (403): Firestore security rules rejected access. Verify rules in Firebase Console.'
+  }
+  if (status === 401) {
+    return 'Authentication expired (401): Please re-authenticate your Cloud Vault.'
+  }
+  if (status === 400) {
+    try {
+      const parsed = JSON.parse(rawText)
+      if (parsed.error?.message) {
+        return `Firestore rejected document (400): ${parsed.error.message}`
+      }
+    } catch {}
+    return `Firestore Bad Request (400): ${rawText.slice(0, 120)}`
+  }
+  try {
+    const parsed = JSON.parse(rawText)
+    if (parsed.error?.message) {
+      return `Firestore error (${status}): ${parsed.error.message}`
+    }
+  } catch {}
+  return `Firestore HTTP ${status}: ${rawText.slice(0, 120)}`
+}
+
 class SyncEngine {
   private static uploadedBlobs: Map<string, string> = new Map()
   private status: CloudSyncStatus = 'idle'
@@ -103,7 +128,7 @@ class SyncEngine {
     this.setupPowerMonitor()
 
     adaptiveGovernor.init(async (entries) => {
-      await this.processWalEntries(entries)
+      return await this.processWalEntries(entries)
     })
 
     authManager.onAuthStateChanged((user) => {
@@ -359,115 +384,177 @@ class SyncEngine {
   }
 
   /**
-   * Process batched WAL entries with Two-Phase Commit (2PC).
+   * Process a single WAL entry against Firestore.
    */
-  private async processWalEntries(entries: WalEntry[]): Promise<void> {
-    const user = authManager.getCurrentUser()
-    if (!user) return
+  private async processSingleWalEntry(userId: string, entry: WalEntry): Promise<void> {
+    if (entry.action === 'settings' && entry.settings) {
+      const cleanSettings = { ...entry.settings, updatedAt: entry.timestamp }
+      const res = await this.fetchFirestore(`users/${encodeURIComponent(userId)}/config/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: toFsDoc(cleanSettings) })
+      })
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(extractFriendlyFirestoreError(res.status, errText))
+      }
+      return
+    }
 
-    for (const entry of entries) {
-      if (entry.action === 'settings' && entry.settings) {
-        const cleanSettings = { ...entry.settings, updatedAt: entry.timestamp }
-        const res = await this.fetchFirestore(`users/${encodeURIComponent(user.uid)}/config/settings`, {
+    if (!entry.item) return
+
+    if (entry.action === 'delete') {
+      const res = await this.fetchFirestore(
+        `users/${encodeURIComponent(userId)}/items/${encodeURIComponent(entry.item.id)}`,
+        {
           method: 'PATCH',
-          body: JSON.stringify({ fields: toFsDoc(cleanSettings) })
-        })
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(`Failed to push settings: HTTP ${res.status} - ${errText}`)
+          body: JSON.stringify({
+            fields: toFsDoc({
+              id: entry.item.id,
+              deletedAt: entry.timestamp,
+              updatedAt: entry.timestamp
+            })
+          })
         }
-        continue
+      )
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(extractFriendlyFirestoreError(res.status, errText))
+      }
+    } else {
+      let sanitizedData: any = { ...entry.item.data }
+
+      // Full text payload extraction & automatic blob offloading for payloads > 500KB
+      if (entry.item.data.kind === 'text') {
+        let fullText: string | null = null
+        if (entry.item.data.hasFullPayload) {
+          fullText = getStore().getFullText(entry.item.id)
+        }
+        if (!fullText) {
+          fullText = entry.item.data.text || ''
+        }
+
+        const byteLen = Buffer.byteLength(fullText, 'utf-8')
+        if (byteLen > 500_000) {
+          try {
+            const textBuf = Buffer.from(fullText, 'utf-8')
+            const sha256 = await this.uploadBlob(userId, textBuf)
+            sanitizedData = {
+              ...sanitizedData,
+              isTextBlob: true,
+              textBlobSha256: sha256,
+              previewText: fullText.slice(0, 300),
+              text: fullText.slice(0, 300)
+            }
+            delete sanitizedData.fullText
+          } catch (err) {
+            console.warn('[SyncEngine] Text blob upload error:', err)
+            sanitizedData.fullText = fullText.slice(0, 500_000)
+          }
+        } else {
+          sanitizedData.fullText = fullText
+        }
       }
 
-      if (!entry.item) continue
+      // Two-Phase Commit (2PC) for Binary Image Blobs with Deduplication
+      if (entry.item.data.kind === 'image') {
+        const itemSha256 = (entry.item.data as any).sha256
+        const imagePath = PATHS.imageFile(entry.item.data.imageId)
 
-      if (entry.action === 'delete') {
-        const res = await this.fetchFirestore(
-          `users/${encodeURIComponent(user.uid)}/items/${encodeURIComponent(entry.item.id)}`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({
-              fields: toFsDoc({
-                id: entry.item.id,
-                deletedAt: entry.timestamp,
-                updatedAt: entry.timestamp
-              })
-            })
-          }
-        )
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(`Failed to mark item deleted: HTTP ${res.status} - ${errText}`)
-        }
-      } else {
-        let sanitizedData: any = { ...entry.item.data }
-
-        // Full text payload extraction
-        if (entry.item.data.kind === 'text' && entry.item.data.hasFullPayload) {
-          const fullText = getStore().getFullText(entry.item.id)
-          if (fullText) {
-            sanitizedData.fullText = fullText
+        if (existsSync(imagePath)) {
+          try {
+            const imgBuf = readFileSync(imagePath)
+            const sha256 = await this.uploadBlob(userId, imgBuf, itemSha256)
+            sanitizedData = { ...sanitizedData, sha256 }
+          } catch (err) {
+            console.warn('[SyncEngine] Blob processing error:', err)
           }
         }
+      }
 
-        // Two-Phase Commit (2PC) for Binary Image Blobs with Deduplication
-        if (entry.item.data.kind === 'image') {
-          const itemSha256 = (entry.item.data as any).sha256
-          const imagePath = PATHS.imageFile(entry.item.data.imageId)
-
-          if (existsSync(imagePath)) {
+      // Two-Phase Commit (2PC) for Multi-Image Collections
+      if (entry.item.data.kind === 'image-collection' && Array.isArray(entry.item.data.images)) {
+        const imagesWithSha: any[] = []
+        for (const img of entry.item.data.images) {
+          const imgPath = PATHS.imageFile(img.imageId)
+          if (existsSync(imgPath)) {
             try {
-              const imgBuf = readFileSync(imagePath)
-              const sha256 = await this.uploadBlob(user.uid, imgBuf, itemSha256)
-              sanitizedData = { ...sanitizedData, sha256 }
-            } catch (err) {
-              console.warn('[SyncEngine] Blob processing error:', err)
-            }
-          }
-        }
-
-        // Two-Phase Commit (2PC) for Multi-Image Collections
-        if (entry.item.data.kind === 'image-collection' && Array.isArray(entry.item.data.images)) {
-          const imagesWithSha: any[] = []
-          for (const img of entry.item.data.images) {
-            const imgPath = PATHS.imageFile(img.imageId)
-            if (existsSync(imgPath)) {
-              try {
-                const imgBuf = readFileSync(imgPath)
-                const sha256 = await this.uploadBlob(user.uid, imgBuf, (img as any).sha256)
-                imagesWithSha.push({ ...img, sha256 })
-              } catch {
-                imagesWithSha.push(img)
-              }
-            } else {
+              const imgBuf = readFileSync(imgPath)
+              const sha256 = await this.uploadBlob(userId, imgBuf, (img as any).sha256)
+              imagesWithSha.push({ ...img, sha256 })
+            } catch {
               imagesWithSha.push(img)
             }
+          } else {
+            imagesWithSha.push(img)
           }
-          sanitizedData = { ...sanitizedData, images: imagesWithSha }
         }
+        sanitizedData = { ...sanitizedData, images: imagesWithSha }
+      }
 
-        const res = await this.fetchFirestore(
-          `users/${encodeURIComponent(user.uid)}/items/${encodeURIComponent(entry.item.id)}`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({
-              fields: toFsDoc({
-                id: entry.item.id,
-                data: sanitizedData,
-                capturedAt: entry.item.capturedAt,
-                hitCount: entry.item.hitCount,
-                pinned: entry.item.pinned,
-                updatedAt: entry.timestamp,
-                deletedAt: null
-              })
+      const res = await this.fetchFirestore(
+        `users/${encodeURIComponent(userId)}/items/${encodeURIComponent(entry.item.id)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: toFsDoc({
+              id: entry.item.id,
+              data: sanitizedData,
+              capturedAt: entry.item.capturedAt,
+              hitCount: entry.item.hitCount,
+              pinned: entry.item.pinned,
+              updatedAt: entry.timestamp,
+              deletedAt: null
             })
-          }
-        )
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(`Failed to push item ${entry.item.id}: HTTP ${res.status} - ${errText}`)
+          })
+        }
+      )
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(extractFriendlyFirestoreError(res.status, errText))
+      }
+    }
+  }
+
+  /**
+   * Process batched WAL entries with Two-Phase Commit (2PC) and concurrent batching.
+   */
+  private async processWalEntries(entries: WalEntry[]): Promise<SyncResult> {
+    const user = authManager.getCurrentUser()
+    if (!user) return { succeededIds: [], failedIds: [] }
+
+    const succeededIds: string[] = []
+    const failedIds: string[] = []
+    let firstError: string | undefined
+
+    const BATCH_SIZE = 4
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+      const batch = entries.slice(i, i + BATCH_SIZE)
+      const results = await Promise.allSettled(
+        batch.map(async (entry) => {
+          await this.processSingleWalEntry(user.uid, entry)
+          return entry.id
+        })
+      )
+
+      for (let j = 0; j < results.length; j++) {
+        const res = results[j]
+        const entry = batch[j]
+        if (res.status === 'fulfilled') {
+          succeededIds.push(entry.id)
+        } else {
+          failedIds.push(entry.id)
+          const reason = res.reason
+          const msg = reason?.message || String(reason)
+          if (!firstError) firstError = msg
+          console.warn(`[SyncEngine] WAL entry failed (${entry.id}):`, msg)
         }
       }
+    }
+
+    return {
+      succeededIds,
+      failedIds,
+      error: firstError
     }
   }
 
@@ -541,13 +628,28 @@ class SyncEngine {
               localModified = true
             }
           } else if (data.data) {
-            // Full text payload hydration
-            if (data.data.kind === 'text' && data.data.fullText && typeof data.data.fullText === 'string') {
-              store.writeTextPayload(data.id, data.data.fullText)
-              data.data.hasFullPayload = true
-              data.data.previewText = data.data.fullText.slice(0, 300)
-              data.data.text = data.data.previewText
-              delete data.data.fullText
+            // Full text payload hydration (inline string or chunked Firestore blob)
+            if (data.data.kind === 'text') {
+              if (data.data.isTextBlob && data.data.textBlobSha256) {
+                try {
+                  const buf = await this.downloadBlob(userId, data.data.textBlobSha256)
+                  if (buf) {
+                    const fullText = buf.toString('utf-8')
+                    store.writeTextPayload(data.id, fullText)
+                    data.data.hasFullPayload = true
+                    data.data.previewText = fullText.slice(0, 300)
+                    data.data.text = data.data.previewText
+                  }
+                } catch (err) {
+                  console.warn('[SyncEngine] Text blob hydration warning:', err)
+                }
+              } else if (data.data.fullText && typeof data.data.fullText === 'string') {
+                store.writeTextPayload(data.id, data.data.fullText)
+                data.data.hasFullPayload = true
+                data.data.previewText = data.data.fullText.slice(0, 300)
+                data.data.text = data.data.previewText
+                delete data.data.fullText
+              }
             }
 
             // Cryptographically verified image hydration
