@@ -583,6 +583,17 @@
   box-shadow: none;
 }
 
+.pill.danger {
+  background: rgba(255, 60, 60, 0.08);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 60, 60, 0.15);
+}
+
+.pill.danger:hover {
+  background: rgba(255, 60, 60, 0.16);
+  color: #ff8585;
+}
+
 .display-pill {
   display: flex;
   flex-direction: column;
@@ -1944,6 +1955,30 @@
 
 .settings-shelf-card.display-card {
   width: 280px;
+}
+
+.settings-shelf-card.vault-shelf-card {
+  width: 260px;
+}
+
+.settings-shelf-card.vault-auth-card {
+  width: 320px;
+}
+
+.settings-shelf-card.vault-sync-card {
+  width: 240px;
+}
+
+.settings-shelf-card.vault-backup-card {
+  width: 250px;
+}
+
+.settings-shelf-card.vault-byo-card {
+  width: 270px;
+}
+
+.settings-shelf-card.vault-diag-card {
+  width: 250px;
 }
 
 .settings-shelf-card.display-card .shelf-card-bottom {
