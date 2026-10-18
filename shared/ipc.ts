@@ -22,6 +22,12 @@ export interface InvokeMap {
   /** Set an item's pinned state. */
   'item:set-pinned': { args: [id: string, pinned: boolean]; result: ClipboardItemDto[] }
 
+  /** Set an item's color tag workspace (null to remove). */
+  'item:set-color-tag': { args: [id: string, colorTag: import('./types').ColorTag | null]; result: ClipboardItemDto[] }
+
+  /** Set an item's custom workspace labels. */
+  'item:set-tags': { args: [id: string, tags: string[]]; result: ClipboardItemDto[] }
+
   /** Delete a single item (and its image file if present). */
   'item:delete': { args: [id: string]; result: ClipboardItemDto[] }
 

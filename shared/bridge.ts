@@ -23,6 +23,8 @@ export interface EdgeApi {
     } | null
   }>
   setPinned: (id: string, pinned: boolean) => Promise<import('./types').ClipboardItemDto[]>
+  setColorTag: (id: string, colorTag: import('./types').ColorTag | null) => Promise<import('./types').ClipboardItemDto[]>
+  setTags: (id: string, tags: string[]) => Promise<import('./types').ClipboardItemDto[]>
   deleteItem: (id: string) => Promise<import('./types').ClipboardItemDto[]>
   deleteBatchItems: (ids: string[]) => Promise<import('./types').ClipboardItemDto[]>
   clearItems: () => Promise<import('./types').ClipboardItemDto[]>

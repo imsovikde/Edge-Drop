@@ -16,6 +16,7 @@ import { thumbnailUrlForFile, thumbnailUrlForStoredImage } from '../main/imagePr
 import {
   type ClipboardItem,
   type ClipboardItemDto,
+  type ColorTag,
   type DragRequest,
   type ItemData,
   type MergeResult,
@@ -77,7 +78,9 @@ export class ItemStore {
       const samePinned = existing.pinned === remote.pinned
       const sameHit = existing.hitCount === remote.hitCount
       const sameCap = existing.capturedAt === remote.capturedAt
-      if (sameSig && samePinned && sameHit && sameCap) {
+      const sameColorTag = existing.colorTag === remote.colorTag
+      const sameTags = JSON.stringify(existing.tags || []) === JSON.stringify(remote.tags || [])
+      if (sameSig && samePinned && sameHit && sameCap && sameColorTag && sameTags) {
         return false
       }
       this.items[idx] = { ...existing, ...remote }
@@ -354,6 +357,27 @@ export class ItemStore {
     it.pinned = pinned
     this.persist()
     this.onMutation?.({ type: 'upsert', item: it })
+  }
+
+  setColorTag(id: string, colorTag: ColorTag | null): ClipboardItemDto[] {
+    const it = this.items.find((x) => x.id === id)
+    if (!it) return this.toDto()
+    it.colorTag = colorTag || undefined
+    this.persist()
+    this.onMutation?.({ type: 'upsert', item: it })
+    return this.toDto()
+  }
+
+  setTags(id: string, tags: string[]): ClipboardItemDto[] {
+    const it = this.items.find((x) => x.id === id)
+    if (!it) return this.toDto()
+    const cleaned = tags
+      ? Array.from(new Set(tags.map((t) => t.trim()).filter((t) => t.length > 0)))
+      : []
+    it.tags = cleaned.length > 0 ? cleaned : undefined
+    this.persist()
+    this.onMutation?.({ type: 'upsert', item: it })
+    return this.toDto()
   }
 
   delete(id: string): void {

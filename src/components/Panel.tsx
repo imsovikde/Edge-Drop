@@ -13,6 +13,7 @@ import { useStore } from '../store/appStore'
 import { PANEL_LEAVE_EVENT, PANEL_ENTER_EVENT } from '../hooks/useEdgeHover'
 import { Header } from './Header'
 import { ShelfSearch } from './ShelfSearch'
+import { TagWorkspaceBar } from './TagWorkspaceBar'
 import { ItemList } from './ItemList'
 import { EmojiPicker } from './EmojiPicker'
 import { Settings } from './Settings'
@@ -480,7 +481,12 @@ export function Panel() {
           />
 
           <ToastStack />
-          {!isHorizontal && !emojiOpen && !settingsOpen && <ShelfSearch />}
+          {!isHorizontal && !emojiOpen && !settingsOpen && (
+            <>
+              <ShelfSearch />
+              <TagWorkspaceBar />
+            </>
+          )}
           <div style={{ flex: 1, display: 'grid', gridTemplate: '1fr / 1fr', overflow: 'hidden', position: 'relative' }}>
             {/* Main clipboard / emoji view (persistent so ItemList is never torn down and doesn't jump on Y-axis) */}
             <div

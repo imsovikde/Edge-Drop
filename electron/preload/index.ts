@@ -179,6 +179,8 @@ const api = {
   /* Renderer -> Main */
   loadState: () => invoke('state:load'),
   setPinned: (id: string, pinned: boolean) => invoke('item:set-pinned', id, pinned),
+  setColorTag: (id: string, colorTag: import('../../shared/types').ColorTag | null) => invoke('item:set-color-tag', id, colorTag),
+  setTags: (id: string, tags: string[]) => invoke('item:set-tags', id, tags),
   deleteItem: (id: string) => invoke('item:delete', id),
   deleteBatchItems: (ids: string[]) => invoke('item:delete-batch', ids),
   clearItems: () => invoke('item:clear'),

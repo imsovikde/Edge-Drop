@@ -72,6 +72,8 @@ export type ItemKind = ItemData['kind']
 
 export type TypeFilter = 'all' | 'text' | 'links' | 'images' | 'files' | 'colors'
 
+export type ColorTag = 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'slate'
+
 /**
  * A single clipboard entry. `id` is stable across the lifetime of the entry;
  * it is used as the React key and the storage key for pinned/persisted items.
@@ -85,6 +87,10 @@ export interface ClipboardItem {
   hitCount: number
   /** Pinned items never scroll off and survive app restarts. */
   pinned: boolean
+  /** Optional custom workspace labels. */
+  tags?: string[]
+  /** Optional color-coded tag workspace identifier. */
+  colorTag?: ColorTag
 }
 
 /**
@@ -104,6 +110,8 @@ export interface FileEntry {
 
 /** Payload sent over IPC: same as ClipboardItem but with inline image previews. */
 export interface ClipboardItemDto extends Omit<ClipboardItem, 'data'> {
+  tags?: string[]
+  colorTag?: ColorTag
   data:
   | { kind: 'text'; text: string; html?: string; isUrl: boolean; isColor?: boolean; hasFullPayload?: boolean; previewText?: string }
   | ({ kind: 'image'; preview: string } & ClipboardImageFields)

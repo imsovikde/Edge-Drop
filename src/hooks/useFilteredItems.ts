@@ -65,6 +65,7 @@ export function useFilteredItems(): GroupedItems {
   const items = useStore((s) => s.items)
   const query = useStore((s) => s.query)
   const typeFilter = useStore((s) => s.typeFilter)
+  const activeTagFilter = useStore((s) => s.activeTagFilter)
   const tutorialStep = useStore((s) => s.tutorialStep)
 
   return useMemo(() => {
@@ -92,8 +93,13 @@ export function useFilteredItems(): GroupedItems {
     for (const it of filteredByTutorial) {
       if (!matches(it, query.trim())) continue
       if (!itemMatchesTypeFilter(it, typeFilter)) continue
+      if (activeTagFilter && activeTagFilter !== 'all') {
+        const matchesColor = it.colorTag === activeTagFilter
+        const matchesCustom = it.tags && it.tags.includes(activeTagFilter)
+        if (!matchesColor && !matchesCustom) continue
+      }
       ;(it.pinned ? pinned : recent).push(it)
     }
     return { pinned, recent }
-  }, [items, query, typeFilter, tutorialStep])
+  }, [items, query, typeFilter, activeTagFilter, tutorialStep])
 }

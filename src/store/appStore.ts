@@ -61,6 +61,8 @@ interface AppState {
   query: string
   typeFilter: import('../../shared/types').TypeFilter
   setTypeFilter: (filter: import('../../shared/types').TypeFilter) => void
+  activeTagFilter: import('../../shared/types').ColorTag | 'all' | null
+  setActiveTagFilter: (tag: import('../../shared/types').ColorTag | 'all' | null) => void
   /** Whether the panel blade is expanded. */
   open: boolean
   /** Settings sheet visibility. */
@@ -160,6 +162,8 @@ interface AppState {
 
   /* mutations (delegate to main) */
   togglePin: (id: string, pinned: boolean) => Promise<void>
+  setColorTag: (id: string, colorTag: import('../../shared/types').ColorTag | null) => Promise<void>
+  setTags: (id: string, tags: string[]) => Promise<void>
   remove: (id: string) => Promise<void>
   clear: (ids?: string[]) => Promise<void>
   copy: (id: string) => Promise<void>
@@ -185,6 +189,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ typeFilter, emojiOpen: false, expandedStackId: null })
     // The list remounts on filter change; leave the flyout open and it
     // would float over a tab that no longer contains the source card.
+    if (get().previewItemId) get().setPreviewItemId(null)
+  },
+  activeTagFilter: null,
+  setActiveTagFilter: (activeTagFilter) => {
+    set({ activeTagFilter, expandedStackId: null })
     if (get().previewItemId) get().setPreviewItemId(null)
   },
   open: false,
@@ -557,6 +566,22 @@ export const useStore = create<AppState>((set, get) => ({
     if (items.length !== current.length || items.some((it, i) => it.id !== current[i]?.id || it.pinned !== current[i]?.pinned)) {
       set({ items })
     }
+  },
+
+  async setColorTag(id, colorTag) {
+    set({
+      items: get().items.map((it) => (it.id === id ? { ...it, colorTag: colorTag || undefined } : it))
+    })
+    const items = await edge.setColorTag(id, colorTag)
+    set({ items })
+  },
+
+  async setTags(id, tags) {
+    set({
+      items: get().items.map((it) => (it.id === id ? { ...it, tags: tags && tags.length > 0 ? tags : undefined } : it))
+    })
+    const items = await edge.setTags(id, tags)
+    set({ items })
   },
 
   async remove(id) {

@@ -404,6 +404,18 @@ export function registerIpc(): void {
     return getStore().toDto()
   })
 
+  handle('item:set-color-tag', (id, colorTag) => {
+    const dtos = getStore().setColorTag(id, colorTag)
+    pushState.items()
+    return dtos
+  })
+
+  handle('item:set-tags', (id, tags) => {
+    const dtos = getStore().setTags(id, tags)
+    pushState.items()
+    return dtos
+  })
+
   handle('item:delete', (id) => {
     const item = getStore().get(id)
     const watcher = getWatcher()

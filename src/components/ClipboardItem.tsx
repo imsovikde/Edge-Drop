@@ -16,7 +16,7 @@
  */
 import { memo, useState, useCallback, useEffect, useLayoutEffect, useRef, forwardRef, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import type { ClipboardItemDto } from '../../shared/types'
+import type { ClipboardItemDto, ColorTag } from '../../shared/types'
 import { MAX_STACK } from '../../shared/types'
 import type { DragRequest } from '../../shared/types'
 import { useStore } from '../store/appStore'
@@ -25,7 +25,7 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon } from './icons'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { CodeBlock } from './CodeBlock'
 import { detectCode } from '../lib/codeDetect'
@@ -112,6 +112,100 @@ export function ShimmerImage({
  */
 export function fileStreamUrl(filePath: string): string {
   return `edgelocal://file/${encodeURIComponent(filePath.replace(/\\/g, '/'))}`
+}
+
+/* ------------------------------------------------------------------ */
+/* Tag Action Palette Popover                                         */
+/* ------------------------------------------------------------------ */
+
+const COLOR_TAG_OPTIONS: { id: ColorTag; label: string; color: string }[] = [
+  { id: 'ruby', label: 'Ruby', color: '#ef4444' },
+  { id: 'amber', label: 'Amber', color: '#f59e0b' },
+  { id: 'emerald', label: 'Emerald', color: '#10b981' },
+  { id: 'sapphire', label: 'Sapphire', color: '#3b82f6' },
+  { id: 'violet', label: 'Violet', color: '#8b5cf6' },
+  { id: 'slate', label: 'Slate', color: '#94a3b8' }
+]
+
+function TagActionMenu({
+  itemId,
+  currentColorTag
+}: {
+  itemId: string
+  currentColorTag?: ColorTag
+}) {
+  const [open, setOpen] = useState(false)
+  const setColorTag = useStore((s) => s.setColorTag)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onDocClick)
+    return () => window.removeEventListener('pointerdown', onDocClick)
+  }, [open])
+
+  return (
+    <div className="tag-action-wrap" ref={menuRef}>
+      <button
+        type="button"
+        className={`act${currentColorTag ? ' active' : ''}`}
+        title={currentColorTag ? `Tag: ${currentColorTag}` : 'Color tag'}
+        onClick={(e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          e.currentTarget.blur()
+          playButtonClickSound()
+          setOpen(!open)
+        }}
+      >
+        <TagIcon width={13} height={13} />
+      </button>
+
+      {open && (
+        <div
+          className="tag-palette-flyout"
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+          }}
+        >
+          {COLOR_TAG_OPTIONS.map(({ id, label, color }) => (
+            <button
+              key={id}
+              type="button"
+              className={`tag-palette-dot${currentColorTag === id ? ' is-selected' : ''}`}
+              title={label}
+              style={{ backgroundColor: color }}
+              onClick={() => {
+                playToggleSound(true)
+                setColorTag(itemId, id === currentColorTag ? null : id)
+                setOpen(false)
+              }}
+            />
+          ))}
+          {currentColorTag && (
+            <button
+              type="button"
+              className="tag-palette-clear"
+              title="Remove tag"
+              onClick={() => {
+                playButtonClickSound()
+                setColorTag(itemId, null)
+                setOpen(false)
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /* ------------------------------------------------------------------ */
@@ -382,7 +476,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
         />
       )}
       <div
-        className={`item-main${isPreviewing ? ' force-actions previewing' : ''}`}
+        className={`item-main${isPreviewing ? ' force-actions previewing' : ''}${item.colorTag ? ` has-color-tag tag-${item.colorTag}` : ''}`}
         data-id={item.id}
         draggable={!isPreviewing && item.data.kind !== 'text' && (!isBundle || !expanded)}
         onMouseEnter={handlePrestage}
@@ -475,6 +569,15 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
                   )}
                   <KindBadge item={item} />
                   <ItemDetails item={item} />
+                  {item.colorTag && (
+                    <span
+                      className={`meta-tag-badge tag-${item.colorTag}`}
+                      title={`Tag: ${item.colorTag}`}
+                    >
+                      <span className="tag-dot" />
+                      {item.colorTag}
+                    </span>
+                  )}
                   {item.hitCount > 1 && (
                     <>
                       <span>·</span>
@@ -496,6 +599,10 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           onClick={(e) => { e.stopPropagation(); e.preventDefault(); }} 
           style={{ display: isBundle && expanded ? 'none' : undefined }}
         >
+          <TagActionMenu
+            itemId={item.id}
+            currentColorTag={item.colorTag}
+          />
           <button
             className={`act${item.pinned ? ' active' : ''}`}
             title={item.pinned ? t('item.unpin') : t('item.pin')}

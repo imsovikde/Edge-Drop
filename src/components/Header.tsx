@@ -5,6 +5,7 @@ import { playButtonClickSound } from '../lib/soundEffects'
 import { loadEmojiCatalog } from '../lib/emoji/load'
 import { ShelfSearch } from './ShelfSearch'
 import { EmojiCategoryBar } from './EmojiCategoryBar'
+import { TagWorkspaceBar } from './TagWorkspaceBar'
 
 import { useTranslation } from '../i18n'
 import { ClearMenu } from './ClearMenu'
@@ -245,8 +246,9 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
       </div>
 
       {isHorizontal && !settingsOpen && !emojiOpen && (
-        <div className="header-search header-search-center">
+        <div className="header-search header-search-center" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ShelfSearch />
+          <TagWorkspaceBar isHorizontal={true} />
         </div>
       )}
       {isHorizontal && !settingsOpen && emojiOpen && (
