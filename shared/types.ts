@@ -249,6 +249,7 @@ export interface FirebaseUserDto {
   photoURL: string | null
   isAnonymous: boolean
   providerId: string
+  emailVerified?: boolean
 }
 
 export interface CustomFirebaseConfig {

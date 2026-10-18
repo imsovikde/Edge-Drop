@@ -140,6 +140,9 @@ export interface InvokeMap {
   /** Sign out from Firebase. */
   'auth:sign-out': { args: []; result: void }
 
+  /** Send email verification link to current authenticated user. */
+  'auth:send-verification-email': { args: []; result: { ok: boolean; message: string } }
+
   /** Set encrypted custom Firebase Web SDK configuration. */
   'auth:set-custom-config': { args: [configJson: string]; result: boolean }
 

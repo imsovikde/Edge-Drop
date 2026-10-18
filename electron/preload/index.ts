@@ -223,6 +223,7 @@ const api = {
   signUpEmail: (email: string, pass: string) => invoke('auth:sign-up-email', email, pass),
   signInAnonymous: () => invoke('auth:sign-in-anonymous'),
   signOut: () => invoke('auth:sign-out'),
+  sendVerificationEmail: () => invoke('auth:send-verification-email'),
   setCustomFirebaseConfig: (configJson: string) => invoke('auth:set-custom-config', configJson),
   verifyAndConnectFirebase: (rawInput: string) => invoke('auth:verify-and-connect', rawInput),
   resetCustomFirebaseConfig: () => invoke('auth:reset-custom-config'),
