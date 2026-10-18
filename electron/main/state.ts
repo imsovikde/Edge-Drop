@@ -48,22 +48,27 @@ function handleSystemWake(): void {
 export function initState(): void {
   store.load()
 
-  // Run pre-wipe forensic recovery migration to restore any surviving local data
-  try {
-    runRecoveryMigration(store)
-  } catch (err) {
-    console.error('[State] Recovery migration error:', err)
-  }
+  // Defer heavy disk reconciliation and forensic scanning off the critical startup path
+  // so the DWM window pump responds immediately (<16ms) without stalling.
+  setTimeout(() => {
+    try {
+      runRecoveryMigration(store)
+    } catch (err) {
+      console.error('[State] Recovery migration error:', err)
+    }
 
-  // Reconcile staged temp artifacts with the freshly loaded history: files
-  // owned by living items survive, everything else (crash orphans, deleted
-  // items' leftovers, legacy pre-registry junk) is removed once. This replaces
-  // the old wipe-everything cleanTemp() pass. Runs once — milliseconds.
-  try {
-    reconcileTempOnStartup(store.list())
-  } catch (err) {
-    console.error('[State] Staged temp reconciliation failed:', err)
-  }
+    try {
+      reconcileTempOnStartup(store.list())
+    } catch (err) {
+      console.error('[State] Staged temp reconciliation failed:', err)
+    }
+
+    for (const item of store.toDto()) {
+      if (item.data.kind === 'files' && item.data.paths) {
+        prefetchFileIcons(item.data.paths)
+      }
+    }
+  }, 500)
 
   // One-time v0.2.6 upgrade migration: clear unpinned items once & set default historyLimit to 250
   const currentSettings = loadSettings()
@@ -75,12 +80,6 @@ export function initState(): void {
     store.clearUnpinned()
   }
   store.pruneExpired(loadSettings().autoDeleteHours)
-
-  for (const item of store.toDto()) {
-    if (item.data.kind === 'files' && item.data.paths) {
-      prefetchFileIcons(item.data.paths)
-    }
-  }
   watcher.start((data, png) => {
     if (loadSettings().incognito) return
     store.pruneExpired(loadSettings().autoDeleteHours)

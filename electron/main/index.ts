@@ -28,12 +28,10 @@ import { createHash } from 'node:crypto'
 import { resolveStoredImage, resolveEmojiAsset, resolveIconAsset, emojiAssetDir } from './imageProtocol'
 import { getThumbnailPayloadScheduled, thumbnailCacheControl } from './thumbnailCache'
 
-// Edge-Drop renders a small, mostly static transparent panel. Chromium's GPU
-// process costs substantially more memory (~150–250 MB) than the iGPU compositing
-// savings are worth for such a simple UI. Software compositing keeps the process
-// count and RAM footprint minimal without meaningfully affecting visual quality.
-// Electron requires this call before the ready event.
-app.disableHardwareAcceleration()
+// GPU-accelerated DirectComposition pipeline: enables 120fps obsidian liquid spring
+// physics and prevents Windows DWM software rasterization stalls on install/boot.
+app.commandLine.appendSwitch('disable-gpu-memory-buffer-video-frames')
+app.commandLine.appendSwitch('disable-breakpad')
 
 // Restrict the renderer to a single webContents and forbid remote module usage.
 app.enableSandbox()
@@ -139,11 +137,13 @@ app.whenReady().then(() => {
   }
   setHotZoneWidth(settings.hotZoneWidth || 3)
 
-  void reconcileLaunchAtLoginOnStartup().then((reconciled) => {
-    pushState.settings(reconciled)
-  }).catch((err) => {
-    console.error('[Main] Failed to reconcile launch-at-login with Windows:', err)
-  })
+  setTimeout(() => {
+    void reconcileLaunchAtLoginOnStartup().then((reconciled) => {
+      pushState.settings(reconciled)
+    }).catch((err) => {
+      console.error('[Main] Failed to reconcile launch-at-login with Windows:', err)
+    })
+  }, 1500)
   registerIncognitoApplier((v) => getWatcher().setPaused(v))
   getWatcher().setPaused(settings.incognito)
   pushState.settings(settings)
