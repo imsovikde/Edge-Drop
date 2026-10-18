@@ -25,6 +25,7 @@ import { flushStagedTempRegistry } from './stagedTemp'
 import { extname, join, normalize } from 'node:path'
 import { existsSync, createReadStream } from 'node:fs'
 import { createHash } from 'node:crypto'
+import os from 'node:os'
 import { resolveStoredImage, resolveEmojiAsset, resolveIconAsset, emojiAssetDir } from './imageProtocol'
 import { getThumbnailPayloadScheduled, thumbnailCacheControl } from './thumbnailCache'
 
@@ -124,7 +125,12 @@ app.whenReady().then(() => {
   let settings = loadSettings()
   const hiddenLaunch = shouldStartHidden()
   if (hiddenLaunch) {
-    console.log('[Main] Login launch detected (--hidden / wasOpenedAtLogin) — starting silently in tray')
+    console.log('[Main] Login launch detected (--hidden / wasOpenedAtLogin) - starting silently in tray')
+    try {
+      os.setPriority(0, os.constants.priority.PRIORITY_BELOW_NORMAL)
+    } catch {
+      /* ignore */
+    }
   }
   if (!settings.tutorialCompleted && !hiddenLaunch) {
     // When onboarding is active (initial launch or reset tutorial), reset language to system default so onboarding always begins in System Default

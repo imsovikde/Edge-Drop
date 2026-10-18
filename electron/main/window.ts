@@ -14,6 +14,7 @@
  */
 import { BrowserWindow, screen, shell, powerMonitor, app } from 'electron'
 import { join } from 'node:path'
+import os from 'node:os'
 import koffi from 'koffi'
 import { APP_CONFIG } from './config'
 import { runtime } from './config'
@@ -346,6 +347,13 @@ export function setInteractive(value: boolean): void {
   // Open starts here; hold main-thread thumbnail decodes off its frames.
   noteUiMotion()
   if (value) {
+    try {
+      if (os.getPriority(0) > os.constants.priority.PRIORITY_NORMAL) {
+        os.setPriority(0, os.constants.priority.PRIORITY_NORMAL)
+      }
+    } catch {
+      /* ignore */
+    }
     // Panel is open: disable click-through so user can interact.
     // Remember who is in front BEFORE any search typing can steal focus.
     captureExternalForeground()

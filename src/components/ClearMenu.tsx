@@ -4,6 +4,7 @@ import { TrashIcon } from './icons'
 import { playButtonClickSound } from '../lib/soundEffects'
 import { useTranslation } from '../i18n'
 import type { ClipboardItemDto } from '../../shared/types'
+import { SlideCommit } from './SlideCommit'
 
 interface ClearMenuProps {
   /** Full item list (pinned + recent) to compute time-window ids from. */
@@ -128,7 +129,7 @@ export function ClearMenu({
               top: isMenuDown ? 'calc(100% + 6px)' : undefined,
               bottom: isMenuDown ? undefined : 'calc(100% + 6px)',
               right: 0,
-              minWidth: 190,
+              minWidth: 200,
               background: '#141414',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: 16,
@@ -152,19 +153,40 @@ export function ClearMenu({
 
             <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.1)', margin: '4px 2px' }} />
 
-            <button
-              type="button"
-              onClick={handleAllClick}
-              style={{
-                ...menuItemStyle,
-                color: confirmAll ? '#ff5252' : 'rgba(255, 255, 255, 0.85)',
-                fontWeight: confirmAll ? 600 : 400
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              {confirmAll ? t('item.clearAllConfirm') : t('item.clearAll')}
-            </button>
+            {confirmAll ? (
+              <div style={{ padding: '3px 4px' }}>
+                <SlideCommit
+                  label={t('item.clearAllConfirm') || 'Slide to confirm'}
+                  doneLabel="Cleared"
+                  trackColor="rgba(255, 69, 58, 0.16)"
+                  handleColor="#ff453a"
+                  successColor="#ff453a"
+                  dangerColor="#ff453a"
+                  height={28}
+                  radius={8}
+                  onConfirm={() => {
+                    playButtonClickSound()
+                    setOpen(false)
+                    setConfirmAll(false)
+                    onClearAll()
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAllClick}
+                style={{
+                  ...menuItemStyle,
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  fontWeight: 400
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                {t('item.clearAll')}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

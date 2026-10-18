@@ -435,7 +435,7 @@
 
 .pinned-accordion.horizontal.is-expanded {
   width: var(--pinned-target-width, max-content);
-  max-width: var(--pinned-target-width, 3000px);
+  max-width: var(--pinned-target-width, none);
   margin-right: 10px;
 }
 
