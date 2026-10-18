@@ -43,6 +43,9 @@ export interface InvokeMap {
   /** Update an existing text item's content directly. */
   'item:update-text': { args: [id: string, text: string]; result: boolean }
 
+  /** Deep search across in-memory items and on-disk payload archives. */
+  'vault:deep-search': { args: [query: string, options?: import('./types').DeepSearchOptions]; result: import('./types').DeepSearchResult[] }
+
   /** Remove a specific sub-item from a bundle. */
   'item:remove-subitem': { args: [req: DragRequest]; result: boolean }
 

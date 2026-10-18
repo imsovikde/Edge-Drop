@@ -17,11 +17,16 @@ import { edge } from '../lib/edge'
 import { noteSearchEngaged } from '../lib/searchFocus'
 import { useTranslation } from '../i18n'
 import { CloseIcon, SearchIcon } from './icons'
+import { playButtonClickSound } from '../lib/soundEffects'
 
 export function ShelfSearch() {
   const { t } = useTranslation()
   const query = useStore((s) => s.query)
   const setQuery = useStore((s) => s.setQuery)
+  const deepSearchActive = useStore((s) => s.deepSearchActive)
+  const setDeepSearchActive = useStore((s) => s.setDeepSearchActive)
+  const dateRangeFilter = useStore((s) => s.dateRangeFilter)
+  const setDateRangeFilter = useStore((s) => s.setDateRangeFilter)
   const inputRef = useRef<HTMLInputElement>(null)
   const engagedRef = useRef(false)
 
@@ -67,7 +72,8 @@ export function ShelfSearch() {
   }, [disengage])
 
   return (
-    <div className={`search${query ? ' has-query' : ''}`}>
+    <>
+      <div className={`search${query ? ' has-query' : ''}`}>
       <SearchIcon className="search-icon" width={14} height={14} />
       <input
         ref={inputRef}
@@ -119,6 +125,44 @@ export function ShelfSearch() {
       >
         <CloseIcon width={10} height={10} weight="bold" />
       </button>
+      <button
+        type="button"
+        className={`search-deep-toggle${deepSearchActive ? ' active' : ''}`}
+        title={deepSearchActive ? 'Deep Vault Search active: scanning off-memory payloads' : 'Enable Deep Vault Search (scan full disk payloads)'}
+        tabIndex={-1}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onClick={() => {
+          playButtonClickSound()
+          setDeepSearchActive(!deepSearchActive)
+        }}
+      >
+        <span>⚡ Deep</span>
+      </button>
     </div>
+    {(query || deepSearchActive || dateRangeFilter !== 'all') && (
+      <div className="search-date-filters">
+        {(['all', 'today', 'week', 'month'] as const).map((range) => (
+          <button
+            key={range}
+            type="button"
+            className={`search-date-chip${dateRangeFilter === range ? ' active' : ''}`}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={() => {
+              playButtonClickSound()
+              setDateRangeFilter(range)
+            }}
+          >
+            {range === 'all' ? 'All' : range === 'today' ? 'Today' : range === 'week' ? 'Week' : 'Month'}
+          </button>
+        ))}
+      </div>
+    )}
+    </>
   )
 }

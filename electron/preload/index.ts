@@ -186,6 +186,7 @@ const api = {
   clearItems: () => invoke('item:clear'),
   getFullText: (id: string) => invoke('item:get-full-text', id),
   updateItemText: (id: string, text: string) => invoke('item:update-text', id, text),
+  deepSearch: (query: string, options?: import('../../shared/types').DeepSearchOptions) => invoke('vault:deep-search', query, options),
   copyItem: (id: string) => invoke('item:copy', id),
   copySubitem: (req: import('../../shared/types').DragRequest) => invoke('item:copy-subitem', req),
   pasteItem: (id: string) => invoke('item:paste', id),

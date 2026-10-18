@@ -482,6 +482,10 @@ export function registerIpc(): void {
     return ok
   })
 
+  handle('vault:deep-search', (query, options) => {
+    return getStore().deepSearch(query, options)
+  })
+
   handle('item:copy', async (id) => {
     const item = getStore().get(id)
     console.log('[IPC] item:copy id=', id, 'found=', !!item)

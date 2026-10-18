@@ -299,6 +299,41 @@ export interface FirebaseConnectivityResult {
   projectId?: string
 }
 
+export type DateRangeFilter = 'all' | 'today' | 'week' | 'month'
+
+export interface DeepSearchResult {
+  id: string
+  matchedField: 'text' | 'payload' | 'file' | 'tag'
+  matchSnippet?: string
+}
+
+export interface DeepSearchOptions {
+  dateRange?: DateRangeFilter
+  tag?: string
+  typeFilter?: string
+  maxResults?: number
+}
+
+export interface DiffLine {
+  type: 'add' | 'remove' | 'common'
+  value: string
+  lineA?: number
+  lineB?: number
+  intraLineChanges?: {
+    type: 'add' | 'remove' | 'common'
+    value: string
+  }[]
+}
+
+export interface DiffResult {
+  lines: DiffLine[]
+  stats: {
+    additions: number
+    deletions: number
+    unchanged: number
+  }
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   hotZoneHeight: 0.25,
   hotZoneWidth: 3,

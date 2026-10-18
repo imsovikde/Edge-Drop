@@ -66,11 +66,26 @@ export function useFilteredItems(): GroupedItems {
   const query = useStore((s) => s.query)
   const typeFilter = useStore((s) => s.typeFilter)
   const activeTagFilter = useStore((s) => s.activeTagFilter)
+  const dateRangeFilter = useStore((s) => s.dateRangeFilter)
+  const deepSearchActive = useStore((s) => s.deepSearchActive)
+  const deepSearchResults = useStore((s) => s.deepSearchResults)
   const tutorialStep = useStore((s) => s.tutorialStep)
 
   return useMemo(() => {
     const pinned: ClipboardItemDto[] = []
     const recent: ClipboardItemDto[] = []
+
+    const now = Date.now()
+    let timeCutoff = 0
+    if (dateRangeFilter === 'today') {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      timeCutoff = d.getTime()
+    } else if (dateRangeFilter === 'week') {
+      timeCutoff = now - 7 * 86400000
+    } else if (dateRangeFilter === 'month') {
+      timeCutoff = now - 30 * 86400000
+    }
 
     const filteredByTutorial = items.filter((it) => {
       if (tutorialStep <= 0) return true
@@ -90,8 +105,17 @@ export function useFilteredItems(): GroupedItems {
       }
     })
 
+    const trimmedQuery = query.trim()
+
     for (const it of filteredByTutorial) {
-      if (!matches(it, query.trim())) continue
+      if (timeCutoff > 0 && it.capturedAt < timeCutoff) continue
+
+      if (deepSearchActive && trimmedQuery) {
+        if (!deepSearchResults[it.id]) continue
+      } else {
+        if (!matches(it, trimmedQuery)) continue
+      }
+
       if (!itemMatchesTypeFilter(it, typeFilter)) continue
       if (activeTagFilter && activeTagFilter !== 'all') {
         const matchesColor = it.colorTag === activeTagFilter
@@ -101,5 +125,5 @@ export function useFilteredItems(): GroupedItems {
       ;(it.pinned ? pinned : recent).push(it)
     }
     return { pinned, recent }
-  }, [items, query, typeFilter, activeTagFilter, tutorialStep])
+  }, [items, query, typeFilter, activeTagFilter, dateRangeFilter, deepSearchActive, deepSearchResults, tutorialStep])
 }

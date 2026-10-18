@@ -30,6 +30,7 @@ export interface EdgeApi {
   clearItems: () => Promise<import('./types').ClipboardItemDto[]>
   getFullText: (id: string) => Promise<string>
   updateItemText: (id: string, text: string) => Promise<boolean>
+  deepSearch: (query: string, options?: import('./types').DeepSearchOptions) => Promise<import('./types').DeepSearchResult[]>
   removeSubitem: (req: DragRequest) => Promise<boolean>
   copyItem: (id: string) => Promise<boolean>
   copySubitem: (req: DragRequest) => Promise<boolean>

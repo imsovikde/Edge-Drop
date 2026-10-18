@@ -2269,6 +2269,31 @@ function FileFolderCard({
 /* ------------------------------------------------------------------ */
 
 function Preview({ item }: { item: ClipboardItemDto }) {
+  const query = useStore((s) => s.query)
+  const deepSearchResults = useStore((s) => s.deepSearchResults)
+  const deepMatch = deepSearchResults[item.id]
+
+  const renderHighlighted = (text: string) => {
+    const q = query.trim()
+    if (!q) return text
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`(${escaped})`, 'gi')
+    const parts = text.split(regex)
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === q.toLowerCase() ? (
+            <mark key={i} className="search-highlight">
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    )
+  }
+
   switch (item.data.kind) {
     case 'text': {
       if (item.data.isUrl) {
@@ -2299,7 +2324,16 @@ function Preview({ item }: { item: ClipboardItemDto }) {
           </div>
         )
       }
-      return <div className="preview">{previewText(item.data.text)}</div>
+      return (
+        <div className="preview">
+          {renderHighlighted(previewText(item.data.text))}
+          {deepMatch?.matchedField === 'payload' && deepMatch.matchSnippet && (
+            <div className="deep-payload-snippet" title="Found in disk payload">
+              <span>⚡ {renderHighlighted(deepMatch.matchSnippet)}</span>
+            </div>
+          )}
+        </div>
+      )
     }
 
     case 'image':

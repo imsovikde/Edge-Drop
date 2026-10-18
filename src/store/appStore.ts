@@ -59,6 +59,12 @@ interface AppState {
   hydrated: boolean
   /** Free-text search filter (UI-only state). */
   query: string
+  dateRangeFilter: import('../../shared/types').DateRangeFilter
+  setDateRangeFilter: (range: import('../../shared/types').DateRangeFilter) => void
+  deepSearchActive: boolean
+  setDeepSearchActive: (active: boolean) => void
+  deepSearchResults: Record<string, import('../../shared/types').DeepSearchResult>
+  runDeepSearch: (query: string) => Promise<void>
   typeFilter: import('../../shared/types').TypeFilter
   setTypeFilter: (filter: import('../../shared/types').TypeFilter) => void
   activeTagFilter: import('../../shared/types').ColorTag | 'all' | null
@@ -184,6 +190,41 @@ export const useStore = create<AppState>((set, get) => ({
   settings: { ...DEFAULT_SETTINGS },
   hydrated: false,
   query: '',
+  dateRangeFilter: 'all',
+  setDateRangeFilter: (dateRangeFilter) => {
+    set({ dateRangeFilter })
+    if (get().deepSearchActive) {
+      get().runDeepSearch(get().query)
+    }
+  },
+  deepSearchActive: false,
+  setDeepSearchActive: (deepSearchActive) => {
+    set({ deepSearchActive })
+    if (deepSearchActive) {
+      get().runDeepSearch(get().query)
+    }
+  },
+  deepSearchResults: {},
+  runDeepSearch: async (query: string) => {
+    if (!query.trim() && get().dateRangeFilter === 'all') {
+      set({ deepSearchResults: {} })
+      return
+    }
+    try {
+      const results = await edge.deepSearch(query, {
+        dateRange: get().dateRangeFilter,
+        tag: get().activeTagFilter || undefined,
+        typeFilter: get().typeFilter
+      })
+      const map: Record<string, import('../../shared/types').DeepSearchResult> = {}
+      for (const r of results) {
+        map[r.id] = r
+      }
+      set({ deepSearchResults: map })
+    } catch {
+      set({ deepSearchResults: {} })
+    }
+  },
   typeFilter: 'all',
   setTypeFilter: (typeFilter) => {
     if (get().typeFilter === typeFilter && !get().emojiOpen) return
@@ -467,7 +508,12 @@ export const useStore = create<AppState>((set, get) => ({
   },
   setSettings: (next) => set({ settings: next }),
 
-  setQuery: (query) => set({ query }),
+  setQuery: (query) => {
+    set({ query })
+    if (get().deepSearchActive) {
+      get().runDeepSearch(query)
+    }
+  },
   setOpen: (open) => {
     set({ open })
     if (!open) {

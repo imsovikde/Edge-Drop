@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/appStore'
 import { formatBytes, formatImageDisplayName } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
-import { FileKindIcon, FolderOpenIcon, CopyIcon, CheckIcon, ExternalLinkIcon, CloseIcon, GlobeIcon, EditIcon, SparklesIcon } from './icons'
+import { FileKindIcon, FolderOpenIcon, CopyIcon, CheckIcon, ExternalLinkIcon, CloseIcon, GlobeIcon, EditIcon, SparklesIcon, DiffIcon } from './icons'
 import { parseUrlPreview } from '../lib/urlPreview'
 import { parseColor } from '../lib/colorUtils'
 import { detectCode } from '../lib/codeDetect'
 import { CodeBlock } from './CodeBlock'
+import { DiffViewer } from './DiffViewer'
 import {
   jsonPrettify,
   jsonMinify,
@@ -552,6 +553,7 @@ function TextPreviewAndEditor({
 }) {
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
+  const [showDiff, setShowDiff] = useState(false)
   const [draftText, setDraftText] = useState(activeText)
   const [transformMenuOpen, setTransformMenuOpen] = useState(false)
   const [transformFeedback, setTransformFeedback] = useState<string | null>(null)
@@ -708,6 +710,20 @@ function TextPreviewAndEditor({
             <EditIcon width={13} height={13} />
           </button>
 
+          <button
+            type="button"
+            className={`act${showDiff ? ' active' : ''}`}
+            title={showDiff ? 'Close diff view' : 'Compare with previous item'}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              playButtonClickSound()
+              setShowDiff(!showDiff)
+            }}
+          >
+            <DiffIcon width={13} height={13} />
+          </button>
+
           {!isEditing && (
             <QuickActionButton
               title={t('flyout.copyText')}
@@ -718,7 +734,13 @@ function TextPreviewAndEditor({
         </div>
       </div>
 
-      {isEditing ? (
+      {showDiff ? (
+        <DiffViewer
+          currentItem={item}
+          currentText={activeText}
+          onClose={() => setShowDiff(false)}
+        />
+      ) : isEditing ? (
         <div
           className="flyout-editor-box"
           onClick={(e) => e.stopPropagation()}

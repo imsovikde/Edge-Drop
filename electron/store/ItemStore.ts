@@ -21,6 +21,8 @@ import {
   type ItemData,
   type MergeResult,
   type FileEntry,
+  type DeepSearchResult,
+  type DeepSearchOptions,
   MAX_STACK
 } from '../../shared/types'
 import { PATHS } from './paths'
@@ -870,6 +872,101 @@ export class ItemStore {
       } catch { /* ignore */ }
     }
     return item.data.text
+  }
+
+  public deepSearch(query: string, options?: DeepSearchOptions): DeepSearchResult[] {
+    const q = (query || '').trim().toLowerCase()
+    const max = options?.maxResults ?? 50
+    const results: DeepSearchResult[] = []
+
+    const now = Date.now()
+    const dateRange = options?.dateRange || 'all'
+    let timeCutoff = 0
+    if (dateRange === 'today') {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      timeCutoff = d.getTime()
+    } else if (dateRange === 'week') {
+      timeCutoff = now - 7 * 86400000
+    } else if (dateRange === 'month') {
+      timeCutoff = now - 30 * 86400000
+    }
+
+    for (const it of this.items) {
+      if (results.length >= max) break
+      if (timeCutoff > 0 && it.capturedAt < timeCutoff) continue
+
+      if (options?.tag && options.tag !== 'all') {
+        const matchesColor = it.colorTag === options.tag
+        const matchesCustom = it.tags && it.tags.includes(options.tag)
+        if (!matchesColor && !matchesCustom) continue
+      }
+
+      if (!q) {
+        results.push({
+          id: it.id,
+          matchedField: 'text',
+          matchSnippet: it.data.kind === 'text' ? it.data.text.slice(0, 80) : undefined
+        })
+        continue
+      }
+
+      if (it.tags && it.tags.some((t) => t.toLowerCase().includes(q))) {
+        results.push({
+          id: it.id,
+          matchedField: 'tag',
+          matchSnippet: it.tags.join(', ')
+        })
+        continue
+      }
+
+      if (it.data.kind === 'text') {
+        const previewLower = it.data.text.toLowerCase()
+        const pIdx = previewLower.indexOf(q)
+        if (pIdx >= 0) {
+          const start = Math.max(0, pIdx - 40)
+          const end = Math.min(it.data.text.length, pIdx + q.length + 40)
+          const snippet = (start > 0 ? '...' : '') + it.data.text.slice(start, end) + (end < it.data.text.length ? '...' : '')
+          results.push({
+            id: it.id,
+            matchedField: 'text',
+            matchSnippet: snippet
+          })
+          continue
+        }
+
+        if (it.data.hasFullPayload) {
+          try {
+            const payload = this.getFullText(it.id)
+            const payLower = payload.toLowerCase()
+            const fIdx = payLower.indexOf(q)
+            if (fIdx >= 0) {
+              const start = Math.max(0, fIdx - 40)
+              const end = Math.min(payload.length, fIdx + q.length + 40)
+              const snippet = (start > 0 ? '...' : '') + payload.slice(start, end) + (end < payload.length ? '...' : '')
+              results.push({
+                id: it.id,
+                matchedField: 'payload',
+                matchSnippet: snippet
+              })
+              continue
+            }
+          } catch { /* ignore */ }
+        }
+      } else if (it.data.kind === 'files') {
+        const found = it.data.paths.find((p) => pathBasename(p).toLowerCase().includes(q) || p.toLowerCase().includes(q))
+        if (found) {
+          results.push({
+            id: it.id,
+            matchedField: 'file',
+            matchSnippet: pathBasename(found)
+          })
+          continue
+        }
+      }
+    }
+
+    return results
   }
 
   /* ------------------------------- DTO ----------------------------------- */
