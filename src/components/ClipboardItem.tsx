@@ -25,9 +25,10 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName, calculateTextMetrics } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon, WandIcon, CheckIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon, WandIcon, CheckIcon, ExportFileIcon } from './icons'
 import { QuickMobileModal } from './QuickMobileModal'
 import { TransformModal } from './TransformModal'
+import { ItemExportModal } from './ItemExportModal'
 import { cleanUrl } from '../lib/cleanUrl'
 
 
@@ -234,6 +235,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const [revealed, setRevealed] = useState(false)
   const [showQrModal, setShowQrModal] = useState(false)
   const [showTransformModal, setShowTransformModal] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
   const isSelectedInBatch = useStore((s) => s.selectedItemIds.includes(item.id))
   const isSelectionMode = useStore((s) => s.isSelectionMode)
 
@@ -891,6 +893,21 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
               <WandIcon width={12} height={12} />
             </button>
           )}
+          {item.data.kind === 'text' && (
+            <button
+              className="act"
+              title="Export item (Markdown, TXT, PDF)"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                e.currentTarget.blur()
+                playButtonClickSound()
+                setShowExportModal(true)
+              }}
+            >
+              <ExportFileIcon width={12} height={12} />
+            </button>
+          )}
           <div className="act-divider" />
           <button
             className="act danger"
@@ -922,6 +939,12 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           onApplyText={(newText) => {
             useStore.getState().updateText(item.id, newText)
           }}
+        />
+      )}
+      {showExportModal && item.data.kind === 'text' && (
+        <ItemExportModal
+          item={item}
+          onClose={() => setShowExportModal(false)}
         />
       )}
     </motion.div>
