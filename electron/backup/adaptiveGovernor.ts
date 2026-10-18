@@ -122,7 +122,7 @@ class AdaptiveGovernor {
   /**
    * Queue an item mutation with 300ms sliding-window coalescing.
    */
-  public queueItem(item: ClipboardItem, action: 'upsert' | 'delete'): void {
+  public queueItem(item: ClipboardItem, action: 'upsert' | 'delete', immediate = false): void {
     const existing = this.dirtyItems.get(item.id)
     const entry: WalEntry = {
       id: item.id,
@@ -133,7 +133,7 @@ class AdaptiveGovernor {
     }
     this.dirtyItems.set(item.id, entry)
     this.persistWal()
-    this.scheduleCoalescedFlush()
+    this.scheduleCoalescedFlush(immediate || action === 'upsert')
   }
 
   /**
@@ -151,7 +151,7 @@ class AdaptiveGovernor {
     this.scheduleCoalescedFlush()
   }
 
-  private scheduleCoalescedFlush(): void {
+  private scheduleCoalescedFlush(highPriority = false): void {
     if (this.isSuspended) return
 
     const maxRetry = Math.max(
@@ -160,8 +160,8 @@ class AdaptiveGovernor {
       this.settingsDirty ? this.settingsDirty.retryCount : 0
     )
 
-    // 300ms base window on AC power, 1200ms on battery power to conserve energy
-    let windowMs = this.isOnBattery ? 1200 : 300
+    // 50ms for high-priority AC copies, 300ms base, 1200ms on battery
+    let windowMs = this.isOnBattery ? 1200 : (highPriority ? 50 : 300)
 
     if (maxRetry > 0) {
       // Exponential backoff with jitter: 2^retry * base, capped at 30 seconds

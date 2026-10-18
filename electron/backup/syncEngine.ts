@@ -292,7 +292,7 @@ class SyncEngine {
         throw new Error(`Failed to upload parent blob: HTTP ${parentRes.status} - ${errText}`)
       }
 
-      for (let i = 0; i < chunkCount; i++) {
+      const chunkPromises = Array.from({ length: chunkCount }, async (_, i) => {
         const chunkData = b64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
         const chunkRes = await this.fetchFirestore(
           `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}/chunks/${i}`,
@@ -310,7 +310,8 @@ class SyncEngine {
           const errText = await chunkRes.text()
           throw new Error(`Failed to upload chunk ${i}: HTTP ${chunkRes.status} - ${errText}`)
         }
-      }
+      })
+      await Promise.all(chunkPromises)
     } else {
       const blobRes = await this.fetchFirestore(
         `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}`,
@@ -434,7 +435,7 @@ class SyncEngine {
         }
 
         const byteLen = Buffer.byteLength(fullText, 'utf-8')
-        if (byteLen > 500_000) {
+        if (byteLen > 250_000) {
           try {
             const textBuf = Buffer.from(fullText, 'utf-8')
             const sha256 = await this.uploadBlob(userId, textBuf)
@@ -448,7 +449,7 @@ class SyncEngine {
             delete sanitizedData.fullText
           } catch (err) {
             console.warn('[SyncEngine] Text blob upload error:', err)
-            sanitizedData.fullText = fullText.slice(0, 500_000)
+            sanitizedData.fullText = fullText.slice(0, 250_000)
           }
         } else {
           sanitizedData.fullText = fullText

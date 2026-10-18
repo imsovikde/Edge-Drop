@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { TrashIcon } from './icons'
+import { TrashIcon, LinkIcon, ImageIcon, TypeIcon, PinFillIcon } from './icons'
 import { playButtonClickSound } from '../lib/soundEffects'
 import { useTranslation } from '../i18n'
 import type { ClipboardItemDto } from '../../shared/types'
@@ -53,7 +53,11 @@ export function ClearMenu({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
+  const [holdProgress, setHoldProgress] = useState(0)
+  const [justCleared, setJustCleared] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const holdStartRef = useRef<number | null>(null)
+  const holdRafRef = useRef<number | null>(null)
 
   // Force-close menu when panel slides closed
   useEffect(() => {
@@ -87,6 +91,21 @@ export function ClearMenu({
     if (ids.length > 0) onClear(ids)
   }
 
+  const clearCategory = (category: 'links' | 'images' | 'text') => {
+    const ids = items
+      .filter((it) => {
+        if (it.pinned) return false
+        if (category === 'links') return it.data.kind === 'text' && it.data.isUrl
+        if (category === 'images') return it.data.kind === 'image' || it.data.kind === 'image-collection'
+        if (category === 'text') return it.data.kind === 'text' && !it.data.isUrl
+        return false
+      })
+      .map((it) => it.id)
+    playButtonClickSound()
+    setOpen(false)
+    if (ids.length > 0) onClear(ids)
+  }
+
   const handleAllClick = () => {
     if (!confirmAll) {
       playButtonClickSound()
@@ -98,23 +117,85 @@ export function ClearMenu({
     onClearAll()
   }
 
+  const startHold = () => {
+    if (disabled || open) return
+    holdStartRef.current = Date.now()
+    const tick = () => {
+      if (!holdStartRef.current) return
+      const elapsed = Date.now() - holdStartRef.current
+      const progress = Math.min(1, elapsed / 750)
+      setHoldProgress(progress)
+      if (progress >= 1) {
+        // Complete hold action!
+        playButtonClickSound()
+        onClearAll()
+        setHoldProgress(0)
+        holdStartRef.current = null
+        setJustCleared(true)
+        setTimeout(() => setJustCleared(false), 1400)
+        return
+      }
+      holdRafRef.current = requestAnimationFrame(tick)
+    }
+    holdRafRef.current = requestAnimationFrame(tick)
+  }
+
+  const endHold = () => {
+    if (!holdStartRef.current) return
+    const elapsed = Date.now() - holdStartRef.current
+    if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current)
+    holdStartRef.current = null
+    setHoldProgress(0)
+    // Quick click without hold: toggle dropdown menu
+    if (elapsed < 250 && !justCleared) {
+      playButtonClickSound()
+      setOpen((v) => !v)
+    }
+  }
+
+  const cancelHold = () => {
+    if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current)
+    holdStartRef.current = null
+    setHoldProgress(0)
+  }
+
   const isMenuDown = menuDirection === 'down'
+  const pinnedCount = items.filter((it) => it.pinned).length
 
   return (
     <div ref={ref} style={{ position: 'relative', zIndex: open ? 350 : 'auto' }}>
       <button
         className={`text-btn${open ? ' active' : ''}`}
-        onClick={() => {
-          if (disabled) return
-          playButtonClickSound()
-          setOpen((v) => !v)
-        }}
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={cancelHold}
+        onPointerCancel={cancelHold}
         disabled={disabled}
-        title={t('item.clear')}
-        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+        title={isMenuDown ? 'Hold 1s to clear unpinned history or click for options' : t('item.clear')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          position: 'relative',
+          overflow: 'hidden',
+          userSelect: 'none'
+        }}
       >
+        {holdProgress > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(255, 69, 58, 0.25)',
+              transform: `scaleX(${holdProgress})`,
+              transformOrigin: 'left',
+              transition: 'transform 0.05s linear',
+              pointerEvents: 'none'
+            }}
+          />
+        )}
         <TrashIcon width={13} height={13} className="clear-btn-icon" />
-        <span>{t('item.clear')}</span>
+        <span>{justCleared ? 'Cleared!' : t('item.clear')}</span>
       </button>
 
       <AnimatePresence>
@@ -129,7 +210,7 @@ export function ClearMenu({
               top: isMenuDown ? 'calc(100% + 6px)' : undefined,
               bottom: isMenuDown ? undefined : 'calc(100% + 6px)',
               right: 0,
-              minWidth: 200,
+              minWidth: 220,
               background: '#141414',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: 16,
@@ -150,6 +231,59 @@ export function ClearMenu({
                 {t(`item.clearLast${w.key}` as any)}
               </button>
             ))}
+
+            <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }} />
+
+            {/* Category Selective Clear */}
+            <button
+              type="button"
+              onClick={() => clearCategory('links')}
+              style={{ ...menuItemStyle, gap: 6 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <LinkIcon width={12} height={12} style={{ opacity: 0.6 }} />
+              <span>Clear unpinned links</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => clearCategory('images')}
+              style={{ ...menuItemStyle, gap: 6 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <ImageIcon width={12} height={12} style={{ opacity: 0.6 }} />
+              <span>Clear unpinned images</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => clearCategory('text')}
+              style={{ ...menuItemStyle, gap: 6 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <TypeIcon width={12} height={12} style={{ opacity: 0.6 }} />
+              <span>Clear unpinned text</span>
+            </button>
+
+            {pinnedCount > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                  color: 'rgba(255, 255, 255, 0.45)',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+                }}
+              >
+                <PinFillIcon width={12} height={12} fill="#ffcc00" />
+                <span>{pinnedCount} pinned {pinnedCount === 1 ? 'item' : 'items'} safe</span>
+              </div>
+            )}
 
             <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.1)', margin: '4px 2px' }} />
 
