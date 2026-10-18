@@ -6,13 +6,13 @@
  *   - 1-Click Import and atomic restoration of historical .edvault archives.
  *   - Optional local directory mirroring for OneDrive / NAS / Google Drive syncing.
  */
-import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { join, basename } from 'node:path'
 import { atomicWriteFileSync, computeSha256, sanitizeSafePath } from './cryptoIntegrity'
 import { syncWorker } from './syncWorker'
 import { PATHS } from '../store/paths'
 import { getStore, loadSettings, saveSettings, pushState } from '../main/state'
-import type { ClipboardItem, Settings } from '../../shared/types'
+import type { ClipboardItem, Settings, RollingBackupMetadata } from '../../shared/types'
 
 export interface EdVaultArchive {
   magic: 'EDVAULT'
@@ -173,6 +173,112 @@ export class LocalVault {
       success: true,
       restoredItems,
       restoredImages
+    }
+  }
+
+  /**
+   * Create an automated rolling local backup in backupsDir and prune to maxKeep (default: 5).
+   */
+  public async createRollingBackup(): Promise<RollingBackupMetadata> {
+    const dir = PATHS.backupsDir()
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+
+    const store = getStore()
+    const count = store.list().length
+    const timestamp = Date.now()
+    const filename = `backup-${timestamp}-${count}items.edvault`
+    const targetPath = join(dir, filename)
+
+    const result = await this.exportSnapshot(targetPath)
+    const stat = statSync(targetPath)
+
+    await this.pruneRollingBackups(5)
+
+    return {
+      id: filename,
+      timestamp,
+      itemCount: result.itemCount,
+      byteSize: stat.size,
+      filename
+    }
+  }
+
+  /**
+   * List existing rolling backups ordered from newest to oldest.
+   */
+  public async listRollingBackups(): Promise<RollingBackupMetadata[]> {
+    const dir = PATHS.backupsDir()
+    if (!existsSync(dir)) return []
+
+    const files = readdirSync(dir).filter((f) => f.endsWith('.edvault'))
+    const list: RollingBackupMetadata[] = []
+
+    for (const f of files) {
+      try {
+        const full = join(dir, f)
+        const stat = statSync(full)
+        const match = f.match(/^backup-(\d+)(?:-(\d+)items)?\.edvault$/)
+        const timestamp = match ? parseInt(match[1], 10) : stat.mtimeMs
+        const itemCount = match && match[2] ? parseInt(match[2], 10) : 0
+
+        list.push({
+          id: f,
+          timestamp,
+          itemCount,
+          byteSize: stat.size,
+          filename: f
+        })
+      } catch (err) {
+        console.warn('[LocalVault] failed to stat rolling backup:', f, err)
+      }
+    }
+
+    return list.sort((a, b) => b.timestamp - a.timestamp)
+  }
+
+  /**
+   * Restore a rolling local backup by filename/id.
+   */
+  public async restoreRollingBackup(id: string): Promise<{ success: boolean; restoredItems: number; restoredImages: number }> {
+    const dir = PATHS.backupsDir()
+    const cleanName = basename(id)
+    const targetPath = join(dir, cleanName)
+    return this.importSnapshot(targetPath)
+  }
+
+  /**
+   * Prune rolling backups in backupsDir to keep only the newest N files.
+   */
+  public async pruneRollingBackups(maxKeep = 5): Promise<void> {
+    const dir = PATHS.backupsDir()
+    if (!existsSync(dir)) return
+
+    try {
+      const files = readdirSync(dir)
+        .filter((f) => f.endsWith('.edvault'))
+        .map((f) => {
+          const full = join(dir, f)
+          const stat = statSync(full)
+          const match = f.match(/^backup-(\d+)/)
+          const timestamp = match ? parseInt(match[1], 10) : stat.mtimeMs
+          return { filename: f, fullPath: full, timestamp }
+        })
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      if (files.length > maxKeep) {
+        const toDelete = files.slice(maxKeep)
+        for (const item of toDelete) {
+          try {
+            unlinkSync(item.fullPath)
+          } catch (err) {
+            console.warn('[LocalVault] failed to delete old rolling backup:', item.filename, err)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[LocalVault] pruneRollingBackups error:', err)
     }
   }
 }

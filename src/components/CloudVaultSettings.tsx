@@ -4,6 +4,7 @@ import { useStore } from '../store/appStore'
 import { edge } from '../lib/edge'
 import { Toggle } from './Toggle'
 import { playButtonClickSound, playToggleSound } from '../lib/soundEffects'
+import type { RollingBackupMetadata, FirebaseConnectivityResult } from '../../shared/types'
 
 export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean }) {
   const settings = useStore((s) => s.settings)
@@ -25,6 +26,14 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   const [isSendingVerification, setIsSendingVerification] = useState(false)
   const [isCheckingVerification, setIsCheckingVerification] = useState(false)
   const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false)
+
+  // ── Telemetry & Rolling Backup State ─────────────────────────────────────
+  const [showTelemetry, setShowTelemetry] = useState(false)
+  const [rollingBackups, setRollingBackups] = useState<RollingBackupMetadata[]>([])
+  const [isTestingConnectivity, setIsTestingConnectivity] = useState(false)
+  const [testResult, setTestResult] = useState<FirebaseConnectivityResult | null>(null)
+  const [isCreatingRolling, setIsCreatingRolling] = useState(false)
+  const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null)
 
   // ── Keyboard Focus Engagement (WS_EX_NOACTIVATE Window Unlock) ─────────
   const inputEngagedRef = useRef(false)
@@ -70,6 +79,71 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   useEffect(() => () => {
     disengageFocus()
   }, [disengageFocus])
+
+  // ── Rolling Backups Lifecycle & Test Connectivity ────────────────────────
+  const loadBackups = useCallback(() => {
+    edge.listRollingBackups().then((b) => {
+      if (Array.isArray(b)) setRollingBackups(b)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadBackups()
+  }, [loadBackups])
+
+  const handleTestConnectivity = async () => {
+    playButtonClickSound()
+    setIsTestingConnectivity(true)
+    setTestResult(null)
+    try {
+      const res = await edge.testFirebaseConnectivity()
+      setTestResult(res)
+      if (res.ok) {
+        pushToast({ id: 'test-ok', message: `Firebase reachable (${res.latencyMs}ms)`, tone: 'info' })
+      } else {
+        pushToast({ id: 'test-err', message: res.error || 'Firebase connectivity failed', tone: 'error' })
+      }
+    } catch (err: any) {
+      setTestResult({ ok: false, latencyMs: 0, authOk: false, firestoreOk: false, error: err?.message || 'Check failed' })
+    } finally {
+      setIsTestingConnectivity(false)
+    }
+  }
+
+  const handleCreateRollingBackup = async () => {
+    playButtonClickSound()
+    setIsCreatingRolling(true)
+    try {
+      const b = await edge.createRollingBackup()
+      loadBackups()
+      pushToast({ id: 'backup-created', message: `Rolling backup created (${b.itemCount} items)`, tone: 'info' })
+    } catch (err: any) {
+      pushToast({ id: 'backup-err', message: err?.message || 'Failed to create backup', tone: 'error' })
+    } finally {
+      setIsCreatingRolling(false)
+    }
+  }
+
+  const handleRestoreRollingBackup = async (id: string) => {
+    playButtonClickSound()
+    setRestoringBackupId(id)
+    try {
+      const res = await edge.restoreRollingBackup(id)
+      if (res.success) {
+        pushToast({ id: 'backup-restored', message: `Restored ${res.restoredItems} items and ${res.restoredImages} images!`, tone: 'info' })
+      }
+    } catch (err: any) {
+      pushToast({ id: 'restore-err', message: err?.message || 'Failed to restore backup', tone: 'error' })
+    } finally {
+      setRestoringBackupId(null)
+    }
+  }
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
 
   // ── Email Verification Check & Dispatch ────────────────────────────────
   const handleCheckVerification = async () => {
@@ -588,10 +662,20 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
           <div className="shelf-card-top">
             <div className="setting-group-label">LOCAL SNAPSHOT</div>
             <div className="setting-title">Vault Archive (.edvault)</div>
-            <div className="setting-desc">Export or restore offline vault backup</div>
+            <div className="setting-desc">
+              {rollingBackups.length > 0 ? `${rollingBackups.length} rolling backups available` : 'Export or restore offline vault backup'}
+            </div>
           </div>
           <div className="shelf-card-bottom">
             <div className="setting-pills">
+              <button
+                type="button"
+                className="pill active"
+                onClick={handleCreateRollingBackup}
+                disabled={isCreatingRolling}
+              >
+                {isCreatingRolling ? 'Saving...' : 'Instant Roll'}
+              </button>
               <button
                 type="button"
                 className="pill"
@@ -632,6 +716,14 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                 }}
               >
                 {showConfigInput ? 'Hide' : 'Configure'}
+              </button>
+              <button
+                type="button"
+                className="pill"
+                onClick={handleTestConnectivity}
+                disabled={isTestingConnectivity}
+              >
+                {isTestingConnectivity ? 'Testing...' : 'Test'}
               </button>
               {settings.customFirebaseConfig && (
                 <button
@@ -753,28 +845,81 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
           ) : null}
         </div>
 
-        {isConnected && (
-          <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
-            <div className="setting-pills">
-              <button
-                type="button"
-                className="pill"
-                onClick={handleTriggerSync}
-                disabled={isSyncing}
-              >
-                Sync Now
-              </button>
-              <button
-                type="button"
-                className="pill active"
-                onClick={handleForceSync}
-                disabled={isSubmitting}
-              >
-                Force Sync
-              </button>
-            </div>
+        <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
+          <div className="setting-pills">
+            {isConnected && (
+              <>
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={handleTriggerSync}
+                  disabled={isSyncing}
+                >
+                  Sync Now
+                </button>
+                <button
+                  type="button"
+                  className="pill active"
+                  onClick={handleForceSync}
+                  disabled={isSubmitting}
+                >
+                  Force Sync
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className={`pill ${showTelemetry ? 'active' : ''}`}
+              onClick={() => {
+                playButtonClickSound()
+                setShowTelemetry(!showTelemetry)
+              }}
+            >
+              {showTelemetry ? 'Hide Telemetry' : 'Telemetry HUD'}
+            </button>
           </div>
-        )}
+        </div>
+
+        <AnimatePresence>
+          {showTelemetry && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="vault-telemetry-box"
+            >
+              <div className="vault-telemetry-header">
+                <span>Real-Time Sync Telemetry</span>
+                <span style={{ fontSize: '10px', color: '#10b981' }}>● Live</span>
+              </div>
+              <div className="vault-telemetry-grid">
+                <div className="vault-telemetry-cell">
+                  <span className="vault-telemetry-label">Latency</span>
+                  <span className="vault-telemetry-val">
+                    {cloudSyncState?.latencyMs !== undefined ? `${cloudSyncState.latencyMs} ms` : '—'}
+                  </span>
+                </div>
+                <div className="vault-telemetry-cell">
+                  <span className="vault-telemetry-label">Cloud Docs</span>
+                  <span className="vault-telemetry-val">
+                    {cloudSyncState?.cloudItemCount ?? 0}
+                  </span>
+                </div>
+                <div className="vault-telemetry-cell">
+                  <span className="vault-telemetry-label">WAL Pending</span>
+                  <span className="vault-telemetry-val">
+                    {cloudSyncState?.pendingMutations ?? 0}
+                  </span>
+                </div>
+              </div>
+              {cloudSyncState?.lastSyncedAt && (
+                <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.45)', textAlign: 'right', marginTop: '2px' }}>
+                  Last sync: {new Date(cloudSyncState.lastSyncedAt).toLocaleTimeString()}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Card 2: Authentication & Account Controls */}
@@ -982,11 +1127,19 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
           <div className="setting-pills">
             <button
               type="button"
+              className="pill active"
+              onClick={handleCreateRollingBackup}
+              disabled={isCreatingRolling}
+            >
+              {isCreatingRolling ? 'Saving Snapshot...' : 'Create Instant Backup'}
+            </button>
+            <button
+              type="button"
               className="pill"
               onClick={handleExportVault}
               disabled={isSubmitting}
             >
-              Export .edvault
+              Export Archive...
             </button>
             <button
               type="button"
@@ -994,10 +1147,42 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
               onClick={handleImportVault}
               disabled={isSubmitting}
             >
-              Restore .edvault
+              Restore File...
             </button>
           </div>
         </div>
+
+        {rollingBackups.length > 0 && (
+          <div className="rolling-backup-section">
+            <div className="rolling-backup-header">
+              <span>Rolling Backups (Auto-pruned to 5)</span>
+              <span>{rollingBackups.length} / 5</span>
+            </div>
+            <div className="rolling-backup-list">
+              {rollingBackups.map((b) => (
+                <div key={b.id} className="rolling-backup-item">
+                  <div className="rolling-backup-info">
+                    <span className="rolling-backup-time">
+                      {new Date(b.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                    <span className="rolling-backup-meta">
+                      {b.itemCount} items • {formatBytes(b.byteSize)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="pill active"
+                    style={{ fontSize: '10.5px', padding: '3px 8px', minHeight: '24px' }}
+                    onClick={() => handleRestoreRollingBackup(b.id)}
+                    disabled={restoringBackupId === b.id}
+                  >
+                    {restoringBackupId === b.id ? 'Restoring...' : 'Restore'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {vaultMsg && (
           <div style={{ fontSize: '11px', color: '#10b981', marginTop: '4px' }}>
@@ -1028,6 +1213,14 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
             >
               {showConfigInput ? 'Hide Configuration' : 'Configure Custom Database'}
             </button>
+            <button
+              type="button"
+              className="pill"
+              onClick={handleTestConnectivity}
+              disabled={isTestingConnectivity}
+            >
+              {isTestingConnectivity ? 'Testing...' : 'Test Connection'}
+            </button>
             {settings.customFirebaseConfig && (
               <button
                 type="button"
@@ -1040,6 +1233,17 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
             )}
           </div>
         </div>
+
+        {testResult && (
+          <div className={`vault-test-result ${testResult.ok ? 'success' : 'error'}`}>
+            <span>{testResult.ok ? '✓' : '⚠'}</span>
+            <span>
+              {testResult.ok
+                ? `Connection successful (${testResult.latencyMs}ms) • Auth: OK • Firestore: OK`
+                : `Check failed (${testResult.latencyMs}ms): ${testResult.error}`}
+            </span>
+          </div>
+        )}
 
         <AnimatePresence>
           {showConfigInput && (

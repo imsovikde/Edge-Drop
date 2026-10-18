@@ -167,11 +167,23 @@ export interface InvokeMap {
   /** Force immediate bidirectional reconciliation pass. */
   'sync:force': { args: []; result: void }
 
+  /** Test Firebase project connectivity (Identity Toolkit and Firestore REST). */
+  'auth:test-connectivity': { args: [customConfig?: import('./types').CustomFirebaseConfig]; result: import('./types').FirebaseConnectivityResult }
+
   /** Export .edvault backup snapshot archive. */
   'vault:export': { args: [destPath?: string]; result: { success: boolean; itemCount: number; imageCount: number; path: string } }
 
   /** Import .edvault backup snapshot archive. */
   'vault:import': { args: [srcPath?: string]; result: { success: boolean; restoredItems: number; restoredImages: number } }
+
+  /** List existing rolling local backups. */
+  'vault:list-rolling': { args: []; result: import('./types').RollingBackupMetadata[] }
+
+  /** Create an instant rolling local backup. */
+  'vault:create-rolling': { args: []; result: import('./types').RollingBackupMetadata }
+
+  /** Restore a rolling local backup by ID. */
+  'vault:restore-rolling': { args: [id: string]; result: { success: boolean; restoredItems: number; restoredImages: number } }
 }
 
 /* ------------------------------------------------------------------ */

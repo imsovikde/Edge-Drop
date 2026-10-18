@@ -87,6 +87,10 @@ export interface EdgeApi {
   forceSync: () => Promise<void>
   exportVault: (destPath?: string) => Promise<{ success: boolean; itemCount: number; imageCount: number; path: string }>
   importVault: (srcPath?: string) => Promise<{ success: boolean; restoredItems: number; restoredImages: number }>
+  testFirebaseConnectivity: (customConfig?: import('./types').CustomFirebaseConfig) => Promise<import('./types').FirebaseConnectivityResult>
+  listRollingBackups: () => Promise<import('./types').RollingBackupMetadata[]>
+  createRollingBackup: () => Promise<import('./types').RollingBackupMetadata>
+  restoreRollingBackup: (id: string) => Promise<{ success: boolean; restoredItems: number; restoredImages: number }>
 
   /* Main -> Renderer */
   onSyncState: (cb: (state: import('./types').CloudSyncState) => void) => () => void

@@ -270,6 +270,25 @@ export interface CloudSyncState {
   error: string | null
   pendingMutations: number
   user: FirebaseUserDto | null
+  latencyMs?: number
+  cloudItemCount?: number
+}
+
+export interface RollingBackupMetadata {
+  id: string
+  timestamp: number
+  itemCount: number
+  byteSize: number
+  filename: string
+}
+
+export interface FirebaseConnectivityResult {
+  ok: boolean
+  latencyMs: number
+  authOk: boolean
+  firestoreOk: boolean
+  error?: string
+  projectId?: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {

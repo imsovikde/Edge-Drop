@@ -28,7 +28,7 @@ import { isPasteableEmoji } from '../../shared/emoji'
 import { emojiAssetDir, readEmojiBatch } from './imageProtocol'
 import { authManager } from '../backup/authManager'
 import { syncEngine } from '../backup/syncEngine'
-import { encryptCustomConfig, parseAnyFirebaseConfigInput, verifyFirebaseConnectivity, reinitializeFirebase } from '../backup/firebaseConfig'
+import { encryptCustomConfig, parseAnyFirebaseConfigInput, verifyFirebaseConnectivity, reinitializeFirebase, testFirebaseConnectivity } from '../backup/firebaseConfig'
 import { localVault } from '../backup/localVault'
 import { getSystemDiagnostics } from './diagnostics'
 
@@ -301,6 +301,10 @@ export function registerIpc(): void {
     }
   })
 
+  handle('auth:test-connectivity', async (customConfig) => {
+    return testFirebaseConnectivity(customConfig)
+  })
+
   handle('sync:trigger', async () => {
     syncEngine.triggerSync()
   })
@@ -339,6 +343,18 @@ export function registerIpc(): void {
       target = filePaths[0]
     }
     return localVault.importSnapshot(target)
+  })
+
+  handle('vault:list-rolling', async () => {
+    return localVault.listRollingBackups()
+  })
+
+  handle('vault:create-rolling', async () => {
+    return localVault.createRollingBackup()
+  })
+
+  handle('vault:restore-rolling', async (id) => {
+    return localVault.restoreRollingBackup(id)
   })
 
   handle('app:install-update', () => {

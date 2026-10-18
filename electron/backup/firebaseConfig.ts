@@ -11,7 +11,7 @@ import { initializeApp, getApps, getApp, deleteApp, FirebaseApp } from 'firebase
 import { getFirestore, Firestore } from 'firebase/firestore'
 import { getAuth, Auth } from 'firebase/auth'
 import { getStorage, FirebaseStorage } from 'firebase/storage'
-import { CustomFirebaseConfig } from '../../shared/types'
+import { CustomFirebaseConfig, FirebaseConnectivityResult } from '../../shared/types'
 import { getSettings } from '../store/settings'
 
 export function getBuildTimeFirebaseConfig(): CustomFirebaseConfig | null {
@@ -148,6 +148,68 @@ export async function verifyFirebaseConnectivity(config: CustomFirebaseConfig): 
     return { ok: true }
   } catch (err: any) {
     return { ok: false, error: err?.message || 'Network connectivity check failed. Check your internet connection.' }
+  }
+}
+
+export async function testFirebaseConnectivity(overrideConfig?: CustomFirebaseConfig | null): Promise<FirebaseConnectivityResult> {
+  const config = overrideConfig !== undefined ? overrideConfig : getActiveFirebaseConfig()
+  if (!config || !config.apiKey || !config.projectId) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      authOk: false,
+      firestoreOk: false,
+      error: 'No active Firebase configuration found. Please configure a custom Firebase project or build with Firebase env variables.'
+    }
+  }
+
+  const start = Date.now()
+  let authOk = false
+  let firestoreOk = false
+  let errorMessage: string | undefined
+
+  try {
+    // 1. Auth check
+    const authUrl = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${encodeURIComponent(config.apiKey)}`
+    const authRes = await fetch(authUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        continueUri: `https://${config.authDomain || `${config.projectId}.firebaseapp.com`}`
+      })
+    })
+    const authData = (await authRes.json().catch(() => ({}))) as any
+    if (authRes.ok) {
+      authOk = true
+    } else {
+      errorMessage = authData?.error?.message || `Auth endpoint failed: HTTP ${authRes.status}`
+    }
+
+    // 2. Firestore check (pings Firestore REST API)
+    const fsUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents?pageSize=1&key=${encodeURIComponent(config.apiKey)}`
+    const fsRes = await fetch(fsUrl, { method: 'GET' })
+    if (fsRes.ok || fsRes.status === 403) {
+      firestoreOk = true
+    } else {
+      const fsData = (await fsRes.json().catch(() => ({}))) as any
+      if (!errorMessage) {
+        errorMessage = fsData?.error?.message || `Firestore endpoint failed: HTTP ${fsRes.status}`
+      }
+    }
+  } catch (err: any) {
+    errorMessage = err?.message || 'Network error during connectivity check'
+  }
+
+  const latencyMs = Date.now() - start
+  const ok = authOk && firestoreOk
+
+  return {
+    ok,
+    latencyMs,
+    authOk,
+    firestoreOk,
+    error: ok ? undefined : errorMessage,
+    projectId: config.projectId
   }
 }
 

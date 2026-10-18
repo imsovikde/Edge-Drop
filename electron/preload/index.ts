@@ -234,6 +234,10 @@ const api = {
   forceSync: () => invoke('sync:force'),
   exportVault: (destPath?: string) => invoke('vault:export', destPath),
   importVault: (srcPath?: string) => invoke('vault:import', srcPath),
+  testFirebaseConnectivity: (customConfig?: import('../../shared/types').CustomFirebaseConfig) => invoke('auth:test-connectivity', customConfig),
+  listRollingBackups: () => invoke('vault:list-rolling'),
+  createRollingBackup: () => invoke('vault:create-rolling'),
+  restoreRollingBackup: (id: string) => invoke('vault:restore-rolling', id),
 
   /* Main -> Renderer */
   onSyncState: (cb: (state: EventArgs<'sync:state-changed'>[0]) => void) => on('sync:state-changed', cb),

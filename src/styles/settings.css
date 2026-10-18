@@ -2982,5 +2982,146 @@
   display: inline-block;
 }
 
+/* ── Real-Time Sync Telemetry Drawer ───────────────────────────────────── */
+.vault-telemetry-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vault-telemetry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: calc(10.5px * var(--font-scale, 1));
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vault-telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.vault-telemetry-cell {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vault-telemetry-label {
+  font-size: calc(9.5px * var(--font-scale, 1));
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.vault-telemetry-val {
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 600;
+  color: #ffffff;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── BYO Connectivity Test Result Badge ────────────────────────────────── */
+.vault-test-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+.vault-test-result.success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #a7f3d0;
+}
+
+.vault-test-result.error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* ── Rolling Local Backups List ────────────────────────────────────────── */
+.rolling-backup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.rolling-backup-header {
+  font-size: calc(10.5px * var(--font-scale, 1));
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rolling-backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rolling-backup-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.rolling-backup-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.rolling-backup-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rolling-backup-time {
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 500;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rolling-backup-meta {
+  font-size: calc(9.5px * var(--font-scale, 1));
+  color: rgba(255, 255, 255, 0.45);
+  font-family: var(--font-mono, monospace);
+}
+
 
 

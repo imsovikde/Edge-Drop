@@ -86,6 +86,8 @@ class SyncEngine {
   private status: CloudSyncStatus = 'idle'
   private lastSyncedAt: number | null = null
   private lastError: string | null = null
+  private lastLatencyMs: number | null = null
+  private cloudItemCount = 0
   private pollInterval: NodeJS.Timeout | null = null
   private isSyncing = false
   private listeners: Set<(state: CloudSyncState) => void> = new Set()
@@ -112,7 +114,9 @@ class SyncEngine {
       lastSyncedAt: this.lastSyncedAt,
       error: this.lastError,
       pendingMutations: adaptiveGovernor.getPendingCount(),
-      user: authManager.getCurrentUser()
+      user: authManager.getCurrentUser(),
+      latencyMs: this.lastLatencyMs ?? undefined,
+      cloudItemCount: this.cloudItemCount
     }
   }
 
@@ -188,6 +192,7 @@ class SyncEngine {
     if (this.isSyncing) return
     this.isSyncing = true
     this.setStatus('syncing')
+    const startSyncMs = Date.now()
 
     try {
       // 1. Flush local write-ahead log mutations
@@ -209,6 +214,7 @@ class SyncEngine {
       // 3. Pull remote changes from cloud
       await this.pullRemoteData(user.uid)
 
+      this.lastLatencyMs = Date.now() - startSyncMs
       this.lastSyncedAt = Date.now()
       this.setStatus('success')
     } catch (err: any) {
@@ -501,6 +507,7 @@ class SyncEngine {
       if (itemsRes.ok) {
         const listData = (await itemsRes.json()) as any
         const documents: any[] = listData?.documents || []
+        this.cloudItemCount = documents.length
         const store = getStore()
         let localModified = false
         const remoteIds = new Set<string>()
