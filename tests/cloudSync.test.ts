@@ -118,5 +118,13 @@ describe('Firebase & Cloud Sync Subsystem', () => {
         expect(imageItem.data.width).toBe(800)
       }
     })
+
+    it('initializes syncEngine cleanly with idle status', async () => {
+      const { syncEngine } = await import('../electron/backup/syncEngine')
+      const state = syncEngine.getState()
+      expect(state.status).toBe('idle')
+      expect(state.lastSyncedAt).toBeNull()
+      expect(state.pendingMutations).toBe(0)
+    })
   })
 })

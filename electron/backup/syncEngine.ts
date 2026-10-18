@@ -3,23 +3,14 @@
  *
  * Responsibilities:
  *   - Kernel-optimized Two-Phase Commit (2PC) for binary blob integrity.
- *   - Metadata Plane: Document sync to Firestore /users/{userId}/items/{itemId}.
- *   - Blob Plane: Binary upload to Firebase Storage or Firestore Blob document fallback with SHA-256 deduplication.
+ *   - Metadata Plane: Direct authenticated Firestore REST API to /users/{userId}/items/{itemId}.
+ *   - Blob Plane: Binary upload to Firestore Blob document store (/users/{userId}/blobs/{sha256}) with SHA-256 deduplication.
  *   - Settings Plane: Synchronizes user preferences to /users/{userId}/config/settings.
- *   - Downlink: Real-time hydration listener via onSnapshot with cryptographic SHA-256 validation.
+ *   - Downlink: Real-time pull reconciliation with cryptographic SHA-256 validation.
  *   - Write-Ahead Log (WAL) & adaptive delta coalescing via AdaptiveGovernor.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import {
-  collection,
-  doc,
-  setDoc,
-  onSnapshot,
-  getDoc,
-  Unsubscribe
-} from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { getFirebaseFirestore, getFirebaseStorage } from './firebaseConfig'
+import { getActiveFirebaseConfig } from './firebaseConfig'
 import { authManager } from './authManager'
 import { adaptiveGovernor, WalEntry } from './adaptiveGovernor'
 import { atomicWriteFileSync, computeSha256, sanitizeSafePath } from './cryptoIntegrity'
@@ -28,13 +19,74 @@ import { ClipboardItem, CloudSyncState, CloudSyncStatus, Settings } from '../../
 import { getStore, loadSettings, saveSettings, pushState } from '../main/state'
 import { PATHS } from '../store/paths'
 
+function toFsValue(v: any): any {
+  if (v === null || v === undefined) return { nullValue: null }
+  if (typeof v === 'boolean') return { booleanValue: v }
+  if (typeof v === 'number') {
+    if (Number.isInteger(v)) return { integerValue: v.toString() }
+    return { doubleValue: v }
+  }
+  if (typeof v === 'string') return { stringValue: v }
+  if (Array.isArray(v)) {
+    return { arrayValue: { values: v.map(toFsValue) } }
+  }
+  if (typeof v === 'object') {
+    const fields: Record<string, any> = {}
+    for (const [k, val] of Object.entries(v)) {
+      if (val !== undefined) {
+        fields[k] = toFsValue(val)
+      }
+    }
+    return { mapValue: { fields } }
+  }
+  return { stringValue: String(v) }
+}
+
+function fromFsValue(fv: any): any {
+  if (!fv) return null
+  if ('nullValue' in fv) return null
+  if ('booleanValue' in fv) return fv.booleanValue
+  if ('integerValue' in fv) return parseInt(fv.integerValue, 10)
+  if ('doubleValue' in fv) return fv.doubleValue
+  if ('stringValue' in fv) return fv.stringValue
+  if ('mapValue' in fv) {
+    const res: Record<string, any> = {}
+    const fields = fv.mapValue.fields || {}
+    for (const [k, v] of Object.entries(fields)) {
+      res[k] = fromFsValue(v)
+    }
+    return res
+  }
+  if ('arrayValue' in fv) {
+    return (fv.arrayValue.values || []).map(fromFsValue)
+  }
+  return null
+}
+
+function toFsDoc(obj: Record<string, any>): Record<string, any> {
+  const fields: Record<string, any> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      fields[k] = toFsValue(v)
+    }
+  }
+  return fields
+}
+
+function fromFsDoc(fields: Record<string, any>): Record<string, any> {
+  const res: Record<string, any> = {}
+  for (const [k, v] of Object.entries(fields || {})) {
+    res[k] = fromFsValue(v)
+  }
+  return res
+}
+
 class SyncEngine {
   private static uploadedBlobs: Map<string, string> = new Map()
   private status: CloudSyncStatus = 'idle'
   private lastSyncedAt: number | null = null
   private lastError: string | null = null
-  private unsubscribeSnapshot: Unsubscribe | null = null
-  private unsubscribeSettings: Unsubscribe | null = null
+  private pollInterval: NodeJS.Timeout | null = null
   private isSyncing = false
   private listeners: Set<(state: CloudSyncState) => void> = new Set()
 
@@ -45,10 +97,10 @@ class SyncEngine {
 
     authManager.onAuthStateChanged((user) => {
       if (user) {
-        this.startRemoteListeners(user.uid)
-        this.triggerSync()
+        this.startBackgroundSync(user.uid)
+        void this.triggerSync()
       } else {
-        this.stopRemoteListeners()
+        this.stopBackgroundSync()
         this.setStatus('idle')
       }
     })
@@ -105,11 +157,30 @@ class SyncEngine {
     }
   }
 
+  private async fetchFirestore(path: string, options: RequestInit = {}): Promise<Response> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.projectId) throw new Error('Firestore project ID is missing')
+
+    const token = await authManager.getFreshIdToken()
+    if (!token) throw new Error('Unauthenticated: No active Firebase ID token available')
+
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/${cleanPath}`
+
+    const headers = new Headers(options.headers || {})
+    headers.set('Authorization', `Bearer ${token}`)
+    if (options.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json')
+    }
+
+    return fetch(url, { ...options, headers })
+  }
+
   public async triggerSync(): Promise<void> {
     const user = authManager.getCurrentUser()
-    const db = getFirebaseFirestore()
+    const config = getActiveFirebaseConfig()
 
-    if (!user || !db) {
+    if (!user || !config?.apiKey) {
       this.setStatus('idle')
       return
     }
@@ -119,15 +190,24 @@ class SyncEngine {
     this.setStatus('syncing')
 
     try {
+      // 1. Flush local write-ahead log mutations
       await adaptiveGovernor.flushNow()
 
-      // Also ensure current settings are committed to cloud
+      // 2. Commit current local settings to cloud
       const currentSettings = loadSettings()
-      const settingsRef = doc(db, 'users', user.uid, 'config', 'settings')
-      await setDoc(settingsRef, {
-        ...currentSettings,
-        updatedAt: Date.now()
-      }, { merge: true })
+      const cleanSettings = { ...currentSettings, updatedAt: Date.now() }
+      const settingsRes = await this.fetchFirestore(`users/${encodeURIComponent(user.uid)}/config/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: toFsDoc(cleanSettings) })
+      })
+
+      if (!settingsRes.ok) {
+        const errText = await settingsRes.text()
+        throw new Error(`Settings push failed: HTTP ${settingsRes.status} - ${errText}`)
+      }
+
+      // 3. Pull remote changes from cloud
+      await this.pullRemoteData(user.uid)
 
       this.lastSyncedAt = Date.now()
       this.setStatus('success')
@@ -144,208 +224,215 @@ class SyncEngine {
    */
   private async processWalEntries(entries: WalEntry[]): Promise<void> {
     const user = authManager.getCurrentUser()
-    const db = getFirebaseFirestore()
-    if (!user || !db) return
+    if (!user) return
 
     for (const entry of entries) {
       if (entry.action === 'settings' && entry.settings) {
-        const settingsRef = doc(db, 'users', user.uid, 'config', 'settings')
-        await setDoc(settingsRef, {
-          ...entry.settings,
-          updatedAt: entry.timestamp
-        }, { merge: true })
+        const cleanSettings = { ...entry.settings, updatedAt: entry.timestamp }
+        const res = await this.fetchFirestore(`users/${encodeURIComponent(user.uid)}/config/settings`, {
+          method: 'PATCH',
+          body: JSON.stringify({ fields: toFsDoc(cleanSettings) })
+        })
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`Failed to push settings: HTTP ${res.status} - ${errText}`)
+        }
         continue
       }
 
       if (!entry.item) continue
-      const itemRef = doc(db, 'users', user.uid, 'items', entry.item.id)
 
       if (entry.action === 'delete') {
-        await setDoc(itemRef, {
-          id: entry.item.id,
-          deletedAt: entry.timestamp,
-          updatedAt: entry.timestamp
-        }, { merge: true })
+        const res = await this.fetchFirestore(
+          `users/${encodeURIComponent(user.uid)}/items/${encodeURIComponent(entry.item.id)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              fields: toFsDoc({
+                id: entry.item.id,
+                deletedAt: entry.timestamp,
+                updatedAt: entry.timestamp
+              })
+            })
+          }
+        )
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`Failed to mark item deleted: HTTP ${res.status} - ${errText}`)
+        }
       } else {
-        let sanitizedData = { ...entry.item.data }
+        let sanitizedData: any = { ...entry.item.data }
 
         // Two-Phase Commit (2PC) for Binary Image Blobs with Deduplication
         if (entry.item.data.kind === 'image') {
           const itemSha256 = (entry.item.data as any).sha256
-          const itemUrl = (entry.item.data as any).downloadUrl
+          const imagePath = PATHS.imageFile(entry.item.data.imageId)
 
-          if (itemSha256 && (itemUrl || SyncEngine.uploadedBlobs.has(itemSha256))) {
-            const cachedUrl = itemUrl || SyncEngine.uploadedBlobs.get(itemSha256)
-            sanitizedData = { ...sanitizedData, downloadUrl: cachedUrl, sha256: itemSha256 } as any
-          } else {
-            const imagePath = PATHS.imageFile(entry.item.data.imageId)
-            if (existsSync(imagePath)) {
-              try {
-                const imgBuf = readFileSync(imagePath)
-                const sha256 = syncWorker.hashBuffer(imgBuf)
+          if (existsSync(imagePath)) {
+            try {
+              const imgBuf = readFileSync(imagePath)
+              const sha256 = itemSha256 || syncWorker.hashBuffer(imgBuf)
+              sanitizedData = { ...sanitizedData, sha256 }
 
-                if (SyncEngine.uploadedBlobs.has(sha256)) {
-                  const cachedUrl = SyncEngine.uploadedBlobs.get(sha256)
-                  sanitizedData = { ...sanitizedData, downloadUrl: cachedUrl, sha256 } as any
-                } else {
-                  const storage = getFirebaseStorage()
-                  if (storage) {
-                    try {
-                      const blobRef = ref(storage, `users/${user.uid}/blobs/${sha256}.png`)
-                      await uploadBytes(blobRef, imgBuf, { contentType: 'image/png' })
-                      const downloadUrl = await getDownloadURL(blobRef)
-                      SyncEngine.uploadedBlobs.set(sha256, downloadUrl)
-                      sanitizedData = { ...sanitizedData, downloadUrl, sha256 } as any
-                    } catch {
-                      // Direct Firestore blob doc fallback
-                      const blobDocRef = doc(db, 'users', user.uid, 'blobs', sha256)
-                      await setDoc(blobDocRef, {
+              if (!SyncEngine.uploadedBlobs.has(sha256)) {
+                // Direct Firestore base64 blob document storage
+                const blobRes = await this.fetchFirestore(
+                  `users/${encodeURIComponent(user.uid)}/blobs/${encodeURIComponent(sha256)}`,
+                  {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                      fields: toFsDoc({
                         sha256,
                         base64: imgBuf.toString('base64'),
                         createdAt: Date.now()
                       })
-                      SyncEngine.uploadedBlobs.set(sha256, '')
-                      sanitizedData = { ...sanitizedData, sha256 } as any
-                    }
-                  } else {
-                    const blobDocRef = doc(db, 'users', user.uid, 'blobs', sha256)
-                    await setDoc(blobDocRef, {
-                      sha256,
-                      base64: imgBuf.toString('base64'),
-                      createdAt: Date.now()
                     })
-                    SyncEngine.uploadedBlobs.set(sha256, '')
-                    sanitizedData = { ...sanitizedData, sha256 } as any
                   }
+                )
+                if (blobRes.ok) {
+                  SyncEngine.uploadedBlobs.set(sha256, '')
                 }
-              } catch (err) {
-                console.warn('[SyncEngine] Blob processing error:', err)
               }
+            } catch (err) {
+              console.warn('[SyncEngine] Blob processing error:', err)
             }
           }
         }
 
-        await setDoc(itemRef, {
-          id: entry.item.id,
-          data: sanitizedData,
-          capturedAt: entry.item.capturedAt,
-          hitCount: entry.item.hitCount,
-          pinned: entry.item.pinned,
-          updatedAt: entry.timestamp,
-          deletedAt: null
-        })
+        const res = await this.fetchFirestore(
+          `users/${encodeURIComponent(user.uid)}/items/${encodeURIComponent(entry.item.id)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              fields: toFsDoc({
+                id: entry.item.id,
+                data: sanitizedData,
+                capturedAt: entry.item.capturedAt,
+                hitCount: entry.item.hitCount,
+                pinned: entry.item.pinned,
+                updatedAt: entry.timestamp,
+                deletedAt: null
+              })
+            })
+          }
+        )
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`Failed to push item ${entry.item.id}: HTTP ${res.status} - ${errText}`)
+        }
       }
     }
   }
 
-  private startRemoteListeners(userId: string): void {
-    this.stopRemoteListeners()
-    const db = getFirebaseFirestore()
-    if (!db) return
-
-    // 1. Listen to items collection
-    const itemsCol = collection(db, 'users', userId, 'items')
-    this.unsubscribeSnapshot = onSnapshot(itemsCol, async (snapshot) => {
-      let localModified = false
-      const store = getStore()
-
-      for (const change of snapshot.docChanges()) {
-        const data = change.doc.data()
-        if (!data || !data.id) continue
-
-        if (data.deletedAt) {
-          if (store.hasItem(data.id)) {
-            store.deleteItem(data.id)
-            localModified = true
-          }
-        } else if (data.data) {
-          // Cryptographically verified image hydration
-          if (data.data.kind === 'image' && data.data.imageId) {
-            const cleanImageId = sanitizeSafePath(PATHS.imagesDir(), `${data.data.imageId}.png`)
-            if (!existsSync(cleanImageId)) {
-              if (data.data.downloadUrl) {
-                try {
-                  const res = await fetch(data.data.downloadUrl)
-                  if (res.ok) {
-                    const buf = Buffer.from(await res.arrayBuffer())
-                    // Verify SHA-256 integrity if signature is provided
-                    if (!data.data.sha256 || computeSha256(buf) === data.data.sha256) {
-                      atomicWriteFileSync(cleanImageId, buf)
-                    }
-                  }
-                } catch {
-                  /* fallback */
-                }
-              } else if (data.data.sha256) {
-                try {
-                  const blobDoc = await getDoc(doc(db, 'users', userId, 'blobs', data.data.sha256))
-                  if (blobDoc.exists() && blobDoc.data()?.base64) {
-                    const buf = Buffer.from(blobDoc.data()!.base64, 'base64')
-                    if (computeSha256(buf) === data.data.sha256) {
-                      atomicWriteFileSync(cleanImageId, buf)
-                    }
-                  }
-                } catch {
-                  /* ignore */
-                }
-              }
-            }
-          }
-
-          // Ingest remote item
-          const remoteItem: ClipboardItem = {
-            id: data.id,
-            data: data.data,
-            capturedAt: data.capturedAt || Date.now(),
-            hitCount: data.hitCount || 1,
-            pinned: !!data.pinned
-          }
-
-          if (store.upsertRemoteItem(remoteItem)) {
-            localModified = true
-          }
-        }
-      }
-
-      if (localModified) {
-        pushState.items()
-      }
-    }, (err) => {
-      console.warn('[SyncEngine] remote items listener error:', err)
-    })
-
-    // 2. Listen to settings document
-    const settingsDoc = doc(db, 'users', userId, 'config', 'settings')
-    this.unsubscribeSettings = onSnapshot(settingsDoc, (snapshot) => {
-      if (snapshot.exists()) {
-        const remoteSettings = snapshot.data()
-        if (remoteSettings) {
+  private async pullRemoteData(userId: string): Promise<void> {
+    // 1. Pull Settings
+    try {
+      const settingsRes = await this.fetchFirestore(`users/${encodeURIComponent(userId)}/config/settings`, {
+        method: 'GET'
+      })
+      if (settingsRes.ok) {
+        const settingsDoc = (await settingsRes.json()) as any
+        if (settingsDoc?.fields) {
+          const remoteSettings = fromFsDoc(settingsDoc.fields)
           const { updatedAt, ...cleanSettings } = remoteSettings
           saveSettings(cleanSettings)
           pushState.settings(loadSettings())
         }
       }
-    }, (err) => {
-      console.warn('[SyncEngine] remote settings listener error:', err)
-    })
+    } catch (err) {
+      console.warn('[SyncEngine] Remote settings pull warning:', err)
+    }
+
+    // 2. Pull Items
+    try {
+      const itemsRes = await this.fetchFirestore(
+        `users/${encodeURIComponent(userId)}/items?pageSize=300`,
+        { method: 'GET' }
+      )
+      if (itemsRes.ok) {
+        const listData = (await itemsRes.json()) as any
+        const documents: any[] = listData?.documents || []
+        const store = getStore()
+        let localModified = false
+
+        for (const docObj of documents) {
+          if (!docObj?.fields) continue
+          const data = fromFsDoc(docObj.fields)
+          if (!data || !data.id) continue
+
+          if (data.deletedAt) {
+            if (store.hasItem(data.id)) {
+              store.deleteItem(data.id)
+              localModified = true
+            }
+          } else if (data.data) {
+            // Cryptographically verified image hydration
+            if (data.data.kind === 'image' && data.data.imageId) {
+              const cleanImageId = sanitizeSafePath(PATHS.imagesDir(), `${data.data.imageId}.png`)
+              if (!existsSync(cleanImageId) && data.data.sha256) {
+                try {
+                  const blobRes = await this.fetchFirestore(
+                    `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(data.data.sha256)}`,
+                    { method: 'GET' }
+                  )
+                  if (blobRes.ok) {
+                    const blobDoc = (await blobRes.json()) as any
+                    if (blobDoc?.fields?.base64?.stringValue) {
+                      const buf = Buffer.from(blobDoc.fields.base64.stringValue, 'base64')
+                      if (computeSha256(buf) === data.data.sha256) {
+                        atomicWriteFileSync(cleanImageId, buf)
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.warn('[SyncEngine] Blob hydration warning:', err)
+                }
+              }
+            }
+
+            // Ingest remote item
+            const remoteItem: ClipboardItem = {
+              id: data.id,
+              data: data.data,
+              capturedAt: data.capturedAt || Date.now(),
+              hitCount: data.hitCount || 1,
+              pinned: !!data.pinned
+            }
+
+            if (store.upsertRemoteItem(remoteItem)) {
+              localModified = true
+            }
+          }
+        }
+
+        if (localModified) {
+          pushState.items()
+        }
+      }
+    } catch (err) {
+      console.warn('[SyncEngine] Remote items pull warning:', err)
+    }
   }
 
-  private stopRemoteListeners(): void {
-    if (this.unsubscribeSnapshot) {
-      this.unsubscribeSnapshot()
-      this.unsubscribeSnapshot = null
-    }
-    if (this.unsubscribeSettings) {
-      this.unsubscribeSettings()
-      this.unsubscribeSettings = null
+  private startBackgroundSync(_userId?: string): void {
+    this.stopBackgroundSync()
+    this.pollInterval = setInterval(() => {
+      void this.triggerSync()
+    }, 20000)
+  }
+
+  private stopBackgroundSync(): void {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval)
+      this.pollInterval = null
     }
   }
 
   /**
-   * Tear down all active remote Firestore listeners and governor buffers cleanly.
+   * Tear down all active timers and governor buffers cleanly.
    */
   public dispose(): void {
-    this.stopRemoteListeners()
+    this.stopBackgroundSync()
     adaptiveGovernor.dispose()
     this.listeners.clear()
     SyncEngine.uploadedBlobs.clear()
