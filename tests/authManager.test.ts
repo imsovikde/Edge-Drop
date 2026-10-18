@@ -72,4 +72,27 @@ describe('AuthManager User DTO & Session Handling', () => {
     const unverifiedDto = toUserDto(unverifiedUser)
     expect(unverifiedDto?.emailVerified).toBe(false)
   })
+
+  it('formats Firebase auth error codes into helpful user messages', async () => {
+    const { formatAuthError } = await import('../electron/backup/authManager')
+    expect(formatAuthError('EMAIL_NOT_FOUND')).toContain('No account found')
+    expect(formatAuthError('INVALID_PASSWORD')).toContain('Incorrect password')
+    expect(formatAuthError('INVALID_LOGIN_CREDENTIALS')).toContain('Invalid email or password')
+    expect(formatAuthError('EMAIL_EXISTS')).toContain('already exists')
+    expect(formatAuthError('TOO_MANY_ATTEMPTS_TRY_LATER')).toContain('Too many failed login attempts')
+  })
+
+  it('rejects password reset with invalid or empty email', async () => {
+    const { authManager } = await import('../electron/backup/authManager')
+    const res = await authManager.sendPasswordResetEmail('')
+    expect(res.ok).toBe(false)
+    expect(res.message).toContain('valid email address')
+  })
+
+  it('returns appropriate response when checking email verification on guest/unauthenticated session', async () => {
+    const { authManager } = await import('../electron/backup/authManager')
+    const res = await authManager.checkEmailVerification()
+    expect(res.verified).toBe(false)
+    expect(res.message).toContain('No registered user session found')
+  })
 })

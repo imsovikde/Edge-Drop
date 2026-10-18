@@ -30,6 +30,7 @@ import { authManager } from '../backup/authManager'
 import { syncEngine } from '../backup/syncEngine'
 import { encryptCustomConfig, parseAnyFirebaseConfigInput, verifyFirebaseConnectivity, reinitializeFirebase } from '../backup/firebaseConfig'
 import { localVault } from '../backup/localVault'
+import { getSystemDiagnostics } from './diagnostics'
 
 export { isStoreBuild }
 
@@ -238,6 +239,14 @@ export function registerIpc(): void {
     return authManager.sendVerificationEmail()
   })
 
+  handle('auth:check-verification', async () => {
+    return authManager.checkEmailVerification()
+  })
+
+  handle('auth:send-password-reset', async (email) => {
+    return authManager.sendPasswordResetEmail(email)
+  })
+
   handle('auth:set-custom-config', async (configJson) => {
     try {
       const encrypted = encryptCustomConfig(configJson)
@@ -356,6 +365,10 @@ export function registerIpc(): void {
   handle('app:quit', () => {
     console.log('[IPC] app:quit requested by renderer — quitting application')
     app.quit()
+  })
+
+  handle('app:get-diagnostics', () => {
+    return getSystemDiagnostics()
   })
 
   handle('file:reveal', (filePath) => {

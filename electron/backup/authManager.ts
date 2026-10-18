@@ -313,6 +313,122 @@ class AuthManager {
     }
   }
 
+  public async checkEmailVerification(): Promise<{ verified: boolean; message: string }> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) {
+      return { verified: false, message: 'Firebase configuration is missing or invalid.' }
+    }
+
+    if (!this.currentUser || this.currentUser.isAnonymous) {
+      return { verified: false, message: 'No registered user session found. Please sign in with email.' }
+    }
+
+    const token = await this.getFreshIdToken()
+    if (!token) {
+      return { verified: false, message: 'Session expired. Please sign in again.' }
+    }
+
+    try {
+      const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(config.apiKey)}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken: token
+        })
+      })
+
+      const data = (await res.json()) as any
+      if (!res.ok) {
+        const errMsg = data?.error?.message || `Lookup failed with status ${res.status}`
+        return { verified: false, message: formatAuthError(errMsg) }
+      }
+
+      const userInfo = data.users?.[0]
+      const isVerified = !!userInfo?.emailVerified
+
+      if (isVerified) {
+        // Force refresh the token so the JWT claims update to email_verified: true
+        let refreshedToken: string | undefined
+        if (this.cachedSession?.refreshToken) {
+          const refreshed = await this.refreshAuthToken(this.cachedSession.refreshToken)
+          if (refreshed) refreshedToken = refreshed.idToken
+        }
+
+        if (this.cachedSession) {
+          this.cachedSession = {
+            ...this.cachedSession,
+            emailVerified: true,
+            idToken: refreshedToken || this.cachedSession.idToken,
+            savedAt: Date.now()
+          }
+          this.persistAuthTokens(this.cachedSession)
+        }
+
+        this.currentUser = {
+          ...this.currentUser,
+          emailVerified: true
+        }
+        this.notifyListeners()
+
+        return {
+          verified: true,
+          message: '✓ Email verified successfully! Continuous Cloud Sync is fully active.'
+        }
+      }
+
+      return {
+        verified: false,
+        message: 'Email is not yet verified. Please click the verification link in your email and click Check Status again.'
+      }
+    } catch (err: any) {
+      return {
+        verified: false,
+        message: err?.message || 'Network error while checking verification status.'
+      }
+    }
+  }
+
+  public async sendPasswordResetEmail(targetEmail?: string): Promise<{ ok: boolean; message: string }> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) {
+      return { ok: false, message: 'Firebase configuration is missing or invalid.' }
+    }
+
+    const emailToSend = (targetEmail || this.currentUser?.email || '').trim()
+    if (!emailToSend || !emailToSend.includes('@')) {
+      return { ok: false, message: 'Please provide a valid email address.' }
+    }
+
+    try {
+      const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(config.apiKey)}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: 'PASSWORD_RESET',
+          email: emailToSend
+        })
+      })
+
+      const data = (await res.json()) as any
+      if (!res.ok) {
+        const errMsg = data?.error?.message || `Failed with status ${res.status}`
+        if (errMsg.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+          return { ok: false, message: 'Too many requests. Please wait a few minutes before trying again.' }
+        }
+        return { ok: false, message: formatAuthError(errMsg) }
+      }
+
+      return {
+        ok: true,
+        message: `Password reset link sent to ${emailToSend}. Please check your inbox and spam folder.`
+      }
+    } catch (err: any) {
+      return { ok: false, message: err?.message || 'Network error while sending password reset email.' }
+    }
+  }
+
   private restoreSession(): void {
     try {
       const file = getAuthEncFile()

@@ -77,6 +77,9 @@ export interface EdgeApi {
   signInAnonymous: () => Promise<import('./types').FirebaseUserDto>
   signOut: () => Promise<void>
   sendVerificationEmail: () => Promise<{ ok: boolean; message: string }>
+  checkEmailVerification: () => Promise<{ verified: boolean; message: string }>
+  sendPasswordResetEmail: (email?: string) => Promise<{ ok: boolean; message: string }>
+  getDiagnostics: () => Promise<string>
   setCustomFirebaseConfig: (configJson: string) => Promise<boolean>
   verifyAndConnectFirebase: (rawInput: string) => Promise<{ success: boolean; error?: string; config?: import('./types').CustomFirebaseConfig }>
   resetCustomFirebaseConfig: () => Promise<boolean>

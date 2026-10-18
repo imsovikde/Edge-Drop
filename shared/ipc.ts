@@ -113,6 +113,9 @@ export interface InvokeMap {
   /** Quit the application process. */
   'app:quit': { args: []; result: void }
 
+  /** Generate formatted system diagnostics for one-click issue reporting. */
+  'app:get-diagnostics': { args: []; result: string }
+
   /** Reveal a file in native File Explorer / Finder. */
   'file:reveal': { args: [path: string]; result: boolean }
 
@@ -142,6 +145,12 @@ export interface InvokeMap {
 
   /** Send email verification link to current authenticated user. */
   'auth:send-verification-email': { args: []; result: { ok: boolean; message: string } }
+
+  /** Check if email has been verified and refresh credentials. */
+  'auth:check-verification': { args: []; result: { verified: boolean; message: string } }
+
+  /** Send password reset email link. */
+  'auth:send-password-reset': { args: [email?: string]; result: { ok: boolean; message: string } }
 
   /** Set encrypted custom Firebase Web SDK configuration. */
   'auth:set-custom-config': { args: [configJson: string]; result: boolean }
