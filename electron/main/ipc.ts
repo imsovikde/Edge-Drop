@@ -12,7 +12,7 @@ import { psHost, getSystemPowerShellPath, getWritableCwd } from './powershell'
 import { filterValidPaths, isExistingFilePath } from './pathValidation'
 import { type InvokeMap, type InvokeChannel, type SendMap, type SendChannel } from '../../shared/ipc'
 import { getStore, loadSettings, saveSettings, pushState, addFiles, getWatcher } from './state'
-import { sendToMainWindow, setInteractive, setHeartbeatPaused, setHotZoneWidth, repositionWindow, getDisplayListOptions, popUpAndRetract, setWindowFocusable, captureExternalForeground, traceFg, resolvePasteTarget } from './window'
+import { sendToMainWindow, setInteractive, isInteractive, setHeartbeatPaused, setHotZoneWidth, repositionWindow, getDisplayListOptions, popUpAndRetract, setWindowFocusable, captureExternalForeground, traceFg, resolvePasteTarget } from './window'
 import { registerGlobalHotkey } from './index'
 import { getOnboardingWindow } from './onboardingWindow'
 import { rebuildTrayMenu } from './tray'
@@ -906,7 +906,10 @@ export function registerIpc(): void {
     if (patch.stickPosition !== undefined || patch.stickDisplayId !== undefined || patch.verticalOffset !== undefined || patch.horizontalOffset !== undefined) {
       repositionWindow()
       if (patch.stickPosition !== undefined || patch.stickDisplayId !== undefined) {
-        popUpAndRetract(1500)
+        const interactive = isInteractive()
+        if (!interactive) {
+          popUpAndRetract(1500)
+        }
       }
     }
     if (patch.autoUpdates !== undefined || patch.updateMode !== undefined) {

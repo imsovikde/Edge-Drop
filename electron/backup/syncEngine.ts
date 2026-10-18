@@ -211,7 +211,7 @@ class SyncEngine {
       headers.set('Content-Type', 'application/json')
     }
 
-    return fetch(url, { ...options, headers })
+    return fetch(url, { ...options, headers, signal: options.signal || AbortSignal.timeout(15_000) })
   }
 
   public async triggerSync(): Promise<void> {
@@ -502,6 +502,8 @@ class SyncEngine {
               capturedAt: entry.item.capturedAt,
               hitCount: entry.item.hitCount,
               pinned: entry.item.pinned,
+              tags: entry.item.tags || [],
+              colorTag: entry.item.colorTag || null,
               updatedAt: entry.timestamp,
               deletedAt: null
             })
@@ -692,7 +694,9 @@ class SyncEngine {
               data: data.data,
               capturedAt: data.capturedAt || Date.now(),
               hitCount: data.hitCount || 1,
-              pinned: !!data.pinned
+              pinned: !!data.pinned,
+              tags: Array.isArray(data.tags) ? data.tags : undefined,
+              colorTag: data.colorTag || undefined
             }
 
             if (store.upsertRemoteItem(remoteItem)) {
