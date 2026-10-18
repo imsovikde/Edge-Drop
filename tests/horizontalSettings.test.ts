@@ -333,6 +333,21 @@ it('Appearance shelf renders Card 1 Copy Indicator toggle first, then Card 2 Ind
     expect(panelCss).toContain('.pinned-floating-pill.horizontal')
     expect(panelCss).toContain('var(--pinned-target-width')
   })
+
+  it('Settings.tsx prominently renders 1-click issue reporter directly alongside Rate/Star buttons in vertical and horizontal layouts', () => {
+    const settingsSrc = read('src/components/Settings.tsx')
+    // Vertical footer support-buttons-group includes 1-click issue reporter
+    expect(settingsSrc).toContain('github-issue-promo-btn')
+    expect(settingsSrc).toContain('handleReportIssue')
+
+    // Horizontal community card includes 1-click issue reporter
+    expect(settingsSrc).toContain('shelf-issue-btn')
+
+    const settingsCss = read('src/styles/settings.css')
+    expect(settingsCss).toContain('.github-issue-promo-btn')
+    expect(settingsCss).toContain('.shelf-issue-btn')
+    expect(settingsCss).toContain('.settings-shelf-card.support-card')
+  })
 });
 
 

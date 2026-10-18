@@ -467,6 +467,22 @@ export function Settings({
                 <StarIcon width={13} height={13} className="star-icon" weight="fill" fill="#fbbf24" style={{ marginLeft: 2 }} />
               </button>
             )}
+
+            {/* Direct 1-Click Issue Reporter: Pre-filled diagnostics and environment telemetry */}
+            <button
+              type="button"
+              className="github-issue-promo-btn"
+              onClick={handleReportIssue}
+              title="Report an issue or bug with auto-filled system diagnostics"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>Report Issue (1-Click)</span>
+              <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>↗</span>
+            </button>
           </div>
           <div className="app-version-footer">
             <span>{t('footer.version')} {currentVersion || '0.3.1'}</span>
@@ -926,45 +942,63 @@ export function Settings({
           <div className="setting-desc">{t('footer.supportTagline') || '100% free & open-source clipboard'}</div>
         </div>
         <div className="shelf-card-bottom">
-          <button
-            type="button"
-            className="shelf-kofi-btn"
-            onClick={() => {
-              playButtonClickSound()
-              window.open('https://github.com/imsovikde/Edge-Drop', '_blank')
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="#ff4757" stroke="none" style={{ flexShrink: 0 }}>
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-            <span>{t('footer.supportOnKofi')}</span>
-          </button>
-          {isStoreBuild ? (
+          <div style={{ display: 'flex', gap: 6, width: '100%' }}>
             <button
               type="button"
-              className="shelf-github-btn"
-              onClick={() => {
-                playButtonClickSound()
-                window.open('ms-windows-store://review/?ProductId=9P3JMHN9M4NR', '_blank')
-              }}
-            >
-              <MicrosoftStoreLogo width={13} height={13} className="store-logo-icon" />
-              <span>{t('footer.reviewOnStore')}</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="shelf-github-btn"
+              className="shelf-kofi-btn"
+              style={{ flex: 1 }}
               onClick={() => {
                 playButtonClickSound()
                 window.open('https://github.com/imsovikde/Edge-Drop', '_blank')
               }}
             >
-              <GithubOctocatLogo width={13} height={13} className="github-octocat-icon" />
-              <span>{t('footer.starOnGithub')}</span>
-              <StarIcon width={12} height={12} className="star-icon" weight="fill" fill="#fbbf24" style={{ marginLeft: 2 }} />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#ff4757" stroke="none" style={{ flexShrink: 0 }}>
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('footer.supportOnKofi')}</span>
             </button>
-          )}
+            {isStoreBuild ? (
+              <button
+                type="button"
+                className="shelf-github-btn"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  playButtonClickSound()
+                  window.open('ms-windows-store://review/?ProductId=9P3JMHN9M4NR', '_blank')
+                }}
+              >
+                <MicrosoftStoreLogo width={13} height={13} className="store-logo-icon" />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('footer.reviewOnStore')}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="shelf-github-btn"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  playButtonClickSound()
+                  window.open('https://github.com/imsovikde/Edge-Drop', '_blank')
+                }}
+              >
+                <GithubOctocatLogo width={13} height={13} className="github-octocat-icon" />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('footer.starOnGithub')}</span>
+                <StarIcon width={12} height={12} className="star-icon" weight="fill" fill="#fbbf24" style={{ marginLeft: 2 }} />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            className="shelf-issue-btn"
+            onClick={handleReportIssue}
+            title="Report an issue or bug with auto-filled system diagnostics"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>Report Issue (1-Click) ↗</span>
+          </button>
         </div>
       </div>
     )
