@@ -124,9 +124,10 @@ export function startDragOut(sender: WebContents, data: ItemData, capturedAt?: n
   if (!staged) return false
 
   const icon = dragIcon(data)
-  const item: Electron.Item = { file: staged.file, icon }
-  if (staged.files) {
-    item.files = staged.files
+  const item: Electron.Item = {
+    file: staged.file,
+    files: staged.files && staged.files.length > 0 ? staged.files : [staged.file],
+    icon
   }
   sender.startDrag(item)
   return true

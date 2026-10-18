@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Highlight, type PrismTheme } from 'prism-react-renderer'
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { CopyIcon, CheckIcon } from './icons'
+import { normalizeCleanCode } from '../lib/codeFormatter'
 
 const TAP_SPRING = { type: 'spring', stiffness: 500, damping: 30 } as const
 const SWAP_SPRING = { type: 'spring', duration: 0.3, bounce: 0 } as const
@@ -178,12 +179,13 @@ function CopyButton({ code, floating }: { code: string; floating?: boolean }) {
   const copy = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
+    const clean = normalizeCleanCode(code)
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(code)
+        await navigator.clipboard.writeText(clean)
       } else {
         const area = document.createElement('textarea')
-        area.value = code
+        area.value = clean
         area.style.position = 'fixed'
         area.style.opacity = '0'
         document.body.appendChild(area)
