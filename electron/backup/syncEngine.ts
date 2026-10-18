@@ -220,6 +220,130 @@ class SyncEngine {
   }
 
   /**
+   * Upload binary buffer to Firestore blobs, splitting into chunks if > 700KB
+   * to strictly obey Firestore's 1MB document limit.
+   */
+  private async uploadBlob(userId: string, buf: Buffer, expectedSha?: string): Promise<string> {
+    const sha256 = expectedSha || syncWorker.hashBuffer(buf)
+    if (SyncEngine.uploadedBlobs.has(sha256)) return sha256
+
+    const b64 = buf.toString('base64')
+    const CHUNK_SIZE = 700_000
+
+    if (b64.length > CHUNK_SIZE) {
+      const chunkCount = Math.ceil(b64.length / CHUNK_SIZE)
+      const parentRes = await this.fetchFirestore(
+        `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: toFsDoc({
+              sha256,
+              isChunked: true,
+              chunkCount,
+              sizeBytes: buf.length,
+              createdAt: Date.now()
+            })
+          })
+        }
+      )
+      if (!parentRes.ok) {
+        const errText = await parentRes.text()
+        throw new Error(`Failed to upload parent blob: HTTP ${parentRes.status} - ${errText}`)
+      }
+
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkData = b64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
+        const chunkRes = await this.fetchFirestore(
+          `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}/chunks/${i}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              fields: toFsDoc({
+                chunkIndex: i,
+                data: chunkData
+              })
+            })
+          }
+        )
+        if (!chunkRes.ok) {
+          const errText = await chunkRes.text()
+          throw new Error(`Failed to upload chunk ${i}: HTTP ${chunkRes.status} - ${errText}`)
+        }
+      }
+    } else {
+      const blobRes = await this.fetchFirestore(
+        `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: toFsDoc({
+              sha256,
+              isChunked: false,
+              base64: b64,
+              sizeBytes: buf.length,
+              createdAt: Date.now()
+            })
+          })
+        }
+      )
+      if (!blobRes.ok) {
+        const errText = await blobRes.text()
+        throw new Error(`Failed to upload blob: HTTP ${blobRes.status} - ${errText}`)
+      }
+    }
+
+    SyncEngine.uploadedBlobs.set(sha256, '')
+    return sha256
+  }
+
+  /**
+   * Hydrate binary buffer from Firestore blobs, reassembling chunks in parallel if chunked.
+   */
+  private async downloadBlob(userId: string, sha256: string): Promise<Buffer | null> {
+    try {
+      const blobRes = await this.fetchFirestore(
+        `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}`,
+        { method: 'GET' }
+      )
+      if (!blobRes.ok) return null
+      const blobDoc = (await blobRes.json()) as any
+      if (!blobDoc?.fields) return null
+
+      const isChunked = blobDoc.fields.isChunked?.booleanValue === true
+      if (isChunked) {
+        const chunkCount = parseInt(blobDoc.fields.chunkCount?.integerValue || '1', 10)
+        const chunkPromises = Array.from({ length: chunkCount }, async (_, i) => {
+          const res = await this.fetchFirestore(
+            `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(sha256)}/chunks/${i}`,
+            { method: 'GET' }
+          )
+          if (!res.ok) throw new Error(`Chunk ${i} download failed`)
+          const doc = (await res.json()) as any
+          return doc?.fields?.data?.stringValue || ''
+        })
+        const chunks = await Promise.all(chunkPromises)
+        const fullB64 = chunks.join('')
+        const buf = Buffer.from(fullB64, 'base64')
+        if (computeSha256(buf) === sha256) {
+          return buf
+        }
+      } else {
+        const b64 = blobDoc.fields.base64?.stringValue
+        if (b64) {
+          const buf = Buffer.from(b64, 'base64')
+          if (computeSha256(buf) === sha256) {
+            return buf
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[SyncEngine] downloadBlob error for ${sha256}:`, err)
+    }
+    return null
+  }
+
+  /**
    * Process batched WAL entries with Two-Phase Commit (2PC).
    */
   private async processWalEntries(entries: WalEntry[]): Promise<void> {
@@ -263,6 +387,14 @@ class SyncEngine {
       } else {
         let sanitizedData: any = { ...entry.item.data }
 
+        // Full text payload extraction
+        if (entry.item.data.kind === 'text' && entry.item.data.hasFullPayload) {
+          const fullText = getStore().getFullText(entry.item.id)
+          if (fullText) {
+            sanitizedData.fullText = fullText
+          }
+        }
+
         // Two-Phase Commit (2PC) for Binary Image Blobs with Deduplication
         if (entry.item.data.kind === 'image') {
           const itemSha256 = (entry.item.data as any).sha256
@@ -271,32 +403,32 @@ class SyncEngine {
           if (existsSync(imagePath)) {
             try {
               const imgBuf = readFileSync(imagePath)
-              const sha256 = itemSha256 || syncWorker.hashBuffer(imgBuf)
+              const sha256 = await this.uploadBlob(user.uid, imgBuf, itemSha256)
               sanitizedData = { ...sanitizedData, sha256 }
-
-              if (!SyncEngine.uploadedBlobs.has(sha256)) {
-                // Direct Firestore base64 blob document storage
-                const blobRes = await this.fetchFirestore(
-                  `users/${encodeURIComponent(user.uid)}/blobs/${encodeURIComponent(sha256)}`,
-                  {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                      fields: toFsDoc({
-                        sha256,
-                        base64: imgBuf.toString('base64'),
-                        createdAt: Date.now()
-                      })
-                    })
-                  }
-                )
-                if (blobRes.ok) {
-                  SyncEngine.uploadedBlobs.set(sha256, '')
-                }
-              }
             } catch (err) {
               console.warn('[SyncEngine] Blob processing error:', err)
             }
           }
+        }
+
+        // Two-Phase Commit (2PC) for Multi-Image Collections
+        if (entry.item.data.kind === 'image-collection' && Array.isArray(entry.item.data.images)) {
+          const imagesWithSha: any[] = []
+          for (const img of entry.item.data.images) {
+            const imgPath = PATHS.imageFile(img.imageId)
+            if (existsSync(imgPath)) {
+              try {
+                const imgBuf = readFileSync(imgPath)
+                const sha256 = await this.uploadBlob(user.uid, imgBuf, (img as any).sha256)
+                imagesWithSha.push({ ...img, sha256 })
+              } catch {
+                imagesWithSha.push(img)
+              }
+            } else {
+              imagesWithSha.push(img)
+            }
+          }
+          sanitizedData = { ...sanitizedData, images: imagesWithSha }
         }
 
         const res = await this.fetchFirestore(
@@ -325,7 +457,14 @@ class SyncEngine {
   }
 
   private async pullRemoteData(userId: string): Promise<void> {
-    // 1. Pull Settings
+    const MACHINE_LOCAL_KEYS: (keyof Settings)[] = [
+      'stickDisplayId',
+      'stickDisplayWorkArea',
+      'stickDisplayScaleFactor',
+      'customFirebaseConfig'
+    ]
+
+    // 1. Pull Settings (Preserving machine-local display geometry and custom DB override)
     try {
       const settingsRes = await this.fetchFirestore(`users/${encodeURIComponent(userId)}/config/settings`, {
         method: 'GET'
@@ -334,8 +473,18 @@ class SyncEngine {
         const settingsDoc = (await settingsRes.json()) as any
         if (settingsDoc?.fields) {
           const remoteSettings = fromFsDoc(settingsDoc.fields)
-          const { updatedAt, ...cleanSettings } = remoteSettings
-          saveSettings(cleanSettings)
+          const currentSettings = loadSettings()
+          const { updatedAt, ...cleanRemote } = remoteSettings
+
+          const mergedSettings: Record<string, any> = { ...cleanRemote }
+          for (const key of MACHINE_LOCAL_KEYS) {
+            if (currentSettings[key] !== undefined) {
+              mergedSettings[key] = currentSettings[key]
+            } else {
+              delete mergedSettings[key]
+            }
+          }
+          saveSettings(mergedSettings as Settings)
           pushState.settings(loadSettings())
         }
       }
@@ -354,11 +503,13 @@ class SyncEngine {
         const documents: any[] = listData?.documents || []
         const store = getStore()
         let localModified = false
+        const remoteIds = new Set<string>()
 
         for (const docObj of documents) {
           if (!docObj?.fields) continue
           const data = fromFsDoc(docObj.fields)
           if (!data || !data.id) continue
+          remoteIds.add(data.id)
 
           if (data.deletedAt) {
             if (store.hasItem(data.id)) {
@@ -366,26 +517,45 @@ class SyncEngine {
               localModified = true
             }
           } else if (data.data) {
+            // Full text payload hydration
+            if (data.data.kind === 'text' && data.data.fullText && typeof data.data.fullText === 'string') {
+              store.writeTextPayload(data.id, data.data.fullText)
+              data.data.hasFullPayload = true
+              data.data.previewText = data.data.fullText.slice(0, 300)
+              data.data.text = data.data.previewText
+              delete data.data.fullText
+            }
+
             // Cryptographically verified image hydration
-            if (data.data.kind === 'image' && data.data.imageId) {
+            if (data.data.kind === 'image' && data.data.imageId && data.data.sha256) {
               const cleanImageId = sanitizeSafePath(PATHS.imagesDir(), `${data.data.imageId}.png`)
-              if (!existsSync(cleanImageId) && data.data.sha256) {
+              if (!existsSync(cleanImageId)) {
                 try {
-                  const blobRes = await this.fetchFirestore(
-                    `users/${encodeURIComponent(userId)}/blobs/${encodeURIComponent(data.data.sha256)}`,
-                    { method: 'GET' }
-                  )
-                  if (blobRes.ok) {
-                    const blobDoc = (await blobRes.json()) as any
-                    if (blobDoc?.fields?.base64?.stringValue) {
-                      const buf = Buffer.from(blobDoc.fields.base64.stringValue, 'base64')
-                      if (computeSha256(buf) === data.data.sha256) {
-                        atomicWriteFileSync(cleanImageId, buf)
-                      }
-                    }
+                  const buf = await this.downloadBlob(userId, data.data.sha256)
+                  if (buf) {
+                    atomicWriteFileSync(cleanImageId, buf)
                   }
                 } catch (err) {
                   console.warn('[SyncEngine] Blob hydration warning:', err)
+                }
+              }
+            }
+
+            // Multi-image collection hydration
+            if (data.data.kind === 'image-collection' && Array.isArray(data.data.images)) {
+              for (const img of data.data.images) {
+                if (img.imageId && img.sha256) {
+                  const cleanImgPath = sanitizeSafePath(PATHS.imagesDir(), `${img.imageId}.png`)
+                  if (!existsSync(cleanImgPath)) {
+                    try {
+                      const buf = await this.downloadBlob(userId, img.sha256)
+                      if (buf) {
+                        atomicWriteFileSync(cleanImgPath, buf)
+                      }
+                    } catch (err) {
+                      console.warn('[SyncEngine] Collection image hydration warning:', err)
+                    }
+                  }
                 }
               }
             }
@@ -402,6 +572,14 @@ class SyncEngine {
             if (store.upsertRemoteItem(remoteItem)) {
               localModified = true
             }
+          }
+        }
+
+        // Backfill pre-existing local items not yet in remote cloud vault
+        const localItems = store.list()
+        for (const local of localItems) {
+          if (!remoteIds.has(local.id)) {
+            adaptiveGovernor.queueItem(local, 'upsert')
           }
         }
 

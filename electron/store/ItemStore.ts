@@ -9,7 +9,7 @@
  *   - Persist the index to JSON and image bytes to per-item PNG files.
  *   - Convert internal items to the serializable DTO form for the renderer.
  */
-import { existsSync, readFileSync, writeFileSync, rmSync, statSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, rmSync, statSync, readdirSync, mkdirSync } from 'node:fs'
 import { join, extname, basename as pathBasename } from 'node:path'
 import { nativeImage, safeStorage } from 'electron'
 import { thumbnailUrlForFile, thumbnailUrlForStoredImage } from '../main/imageProtocol'
@@ -59,18 +59,36 @@ export class ItemStore {
   }
 
   public upsertRemoteItem(remote: ClipboardItem): boolean {
+    if (remote.data.kind === 'text') {
+      const textData = remote.data as any
+      if (textData.fullText && typeof textData.fullText === 'string') {
+        this.writeTextPayload(remote.id, textData.fullText)
+        textData.hasFullPayload = true
+        textData.previewText = textData.fullText.slice(0, 300)
+        textData.text = textData.previewText
+        delete textData.fullText
+      }
+    }
+
     const idx = this.items.findIndex((x) => x.id === remote.id)
     if (idx >= 0) {
-      this.items[idx] = { ...this.items[idx], ...remote }
-      this.rebuildIndex()
-      this.persist()
-      return true
+      const existing = this.items[idx]
+      const sameSig = contentSignature(existing.data) === contentSignature(remote.data)
+      const samePinned = existing.pinned === remote.pinned
+      const sameHit = existing.hitCount === remote.hitCount
+      const sameCap = existing.capturedAt === remote.capturedAt
+      if (sameSig && samePinned && sameHit && sameCap) {
+        return false
+      }
+      this.items[idx] = { ...existing, ...remote }
     } else {
-      this.items.unshift(remote)
-      this.rebuildIndex()
-      this.persist()
-      return true
+      this.items.push(remote)
     }
+
+    this.items.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0))
+    this.rebuildIndex()
+    this.persist()
+    return true
   }
 
   private notifyRemoved(removed: ClipboardItem[]): void {
@@ -106,7 +124,7 @@ export class ItemStore {
 
       if (parsedJson && parsedJson.encrypted === true && typeof parsedJson.payload === 'string') {
         // Encrypted DPAPI Envelope
-        if (safeStorage.isEncryptionAvailable()) {
+        if (safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()) {
           try {
             const decryptedStr = safeStorage.decryptString(Buffer.from(parsedJson.payload, 'base64'))
             parsedIndex = JSON.parse(decryptedStr) as Index
@@ -206,7 +224,7 @@ export class ItemStore {
       const jsonStr = JSON.stringify(indexObj)
       const file = PATHS.indexFile()
 
-      if (safeStorage.isEncryptionAvailable()) {
+      if (safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()) {
         const encryptedBuf = safeStorage.encryptString(jsonStr)
         const envelope = {
           v: 2,
@@ -771,8 +789,12 @@ export class ItemStore {
     return join(PATHS.payloadsDir(), `${id}.txt`)
   }
 
-  private writeTextPayload(id: string, text: string): void {
+  public writeTextPayload(id: string, text: string): void {
     try {
+      const dir = PATHS.payloadsDir()
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true })
+      }
       writeFileSync(this.textPayloadPath(id), text, 'utf8')
     } catch { /* ignore */ }
   }

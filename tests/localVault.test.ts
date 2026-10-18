@@ -12,7 +12,8 @@ let mockSettings: Partial<Settings> = { theme: 'dark', hotZoneHeight: 200 }
 
 vi.mock('../electron/store/paths', () => ({
   PATHS: {
-    imagesDir: () => testImagesDir
+    imagesDir: () => testImagesDir,
+    payloadsDir: () => join(testDir, 'payloads')
   }
 }))
 

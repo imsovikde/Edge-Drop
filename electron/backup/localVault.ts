@@ -16,11 +16,12 @@ import type { ClipboardItem, Settings } from '../../shared/types'
 
 export interface EdVaultArchive {
   magic: 'EDVAULT'
-  version: 1
+  version: 1 | 2
   exportedAt: number
   settings: Settings
   items: readonly ClipboardItem[]
   images: Record<string, string> // imageId -> base64 PNG
+  payloads?: Record<string, string> // itemId -> fullText string
   sha256: string
 }
 
@@ -33,6 +34,17 @@ export class LocalVault {
     const items = store.list()
     const settings = loadSettings()
     const images: Record<string, string> = {}
+    const payloads: Record<string, string> = {}
+
+    // Collect all full text payloads for text items
+    for (const it of items) {
+      if (it.data.kind === 'text' && it.data.hasFullPayload) {
+        const full = store.getFullText(it.id)
+        if (full) {
+          payloads[it.id] = full
+        }
+      }
+    }
 
     // Collect all stored images
     try {
@@ -54,18 +66,20 @@ export class LocalVault {
     const payloadObj = {
       settings,
       items,
-      images
+      images,
+      payloads
     }
     const payloadStr = JSON.stringify(payloadObj)
     const contentSha256 = computeSha256(payloadStr)
 
     const archive: EdVaultArchive = {
       magic: 'EDVAULT',
-      version: 1,
+      version: 2,
       exportedAt: Date.now(),
       settings,
       items,
       images,
+      payloads,
       sha256: contentSha256
     }
 
@@ -123,8 +137,22 @@ export class LocalVault {
       }
     }
 
-    // Ingest items into ItemStore
+    // Ingest items and payloads into ItemStore
     const store = getStore()
+
+    // Restore full text payloads
+    const payloadsDir = typeof PATHS?.payloadsDir === 'function' ? PATHS.payloadsDir() : join(PATHS.imagesDir(), '..', 'payloads')
+    if (!existsSync(payloadsDir)) {
+      mkdirSync(payloadsDir, { recursive: true })
+    }
+    if (archive.payloads && typeof archive.payloads === 'object') {
+      for (const [id, fullText] of Object.entries(archive.payloads)) {
+        if (typeof fullText === 'string') {
+          store.writeTextPayload(id, fullText)
+        }
+      }
+    }
+
     let restoredItems = 0
     for (const item of archive.items) {
       if (item && item.id && item.data) {
