@@ -22,6 +22,7 @@ import { WakeSlider } from './WakeSlider'
 import { playDialTickSound, playToggleSound, playButtonClickSound } from '../lib/soundEffects'
 import { useTranslation } from '../i18n'
 import { CloudVaultSettings } from './CloudVaultSettings'
+import { Toggle } from './Toggle'
 import '../styles/settings.css'
 
 type SettingsTab = 'behaviour' | 'position' | 'appearance' | 'cloud'
@@ -362,6 +363,28 @@ export function Settings({
   )
   const updateBannerRef = useRef<HTMLDivElement | null>(null)
 
+  const handleReportIssue = async () => {
+    playButtonClickSound()
+    try {
+      const diag = await window.edge.getDiagnostics()
+      const url = `https://github.com/imsovikde/Edge-Drop/issues/new?title=%5BBug%5D%3A+&body=${encodeURIComponent(diag)}`
+      window.open(url, '_blank')
+    } catch {
+      window.open('https://github.com/imsovikde/Edge-Drop/issues/new', '_blank')
+    }
+  }
+
+  const handleCopyDiagnostics = async () => {
+    playButtonClickSound()
+    try {
+      const diag = await window.edge.getDiagnostics()
+      await navigator.clipboard.writeText(diag)
+      pushToast({ id: 'diag-copy', message: 'Diagnostics copied to clipboard!', tone: 'info' })
+    } catch {
+      pushToast({ id: 'diag-copy-fail', message: 'Failed to copy diagnostics', tone: 'error' })
+    }
+  }
+
   // ── Persistent footer shared across all tabs ───────────────────────────
   const PersistentFooter = (
     <>
@@ -377,16 +400,22 @@ export function Settings({
           <div className="setting-desc">{t('footer.feedbackDesc')}</div>
         </div>
         <div className="shelf-card-bottom">
-          <button
-            className="pill display-pill"
-            style={{ width: '100%', justifyContent: 'center', padding: '7px 14px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12.5px' }}
-            onClick={() => {
-              playButtonClickSound()
-              window.open('https://github.com/imsovikde/Edge-Drop/issues', '_blank')
-            }}
-          >
-            {t('footer.submitFeedback')}
-          </button>
+          <div className="setting-pills">
+            <button
+              type="button"
+              className="pill active"
+              onClick={handleReportIssue}
+            >
+              Report Issue (Auto-filled) ↗
+            </button>
+            <button
+              type="button"
+              className="pill"
+              onClick={handleCopyDiagnostics}
+            >
+              Copy Diagnostics
+            </button>
+          </div>
         </div>
       </div>
 
@@ -941,24 +970,31 @@ export function Settings({
     )
 
     const renderHorizontalAboutCard = () => (
-      <div className="settings-shelf-card about-card">
+      <div className="settings-shelf-card about-card" style={{ width: 280 }}>
         <div className="shelf-card-top">
           <div className="setting-group-label">{t('groups.aboutEdgeDrop') || 'ABOUT EDGE-DROP'}</div>
           <div className="setting-title">Edge-Drop v{currentVersion || '0.3.2'}</div>
           <div className="setting-desc">{t('footer.feedbackDesc')}</div>
         </div>
         <div className="shelf-card-bottom">
-          <button
-            type="button"
-            className="pill display-pill"
-            style={{ width: '100%', justifyContent: 'center', height: 30, fontSize: 11.5, fontWeight: 550, borderRadius: 999 }}
-            onClick={() => {
-              playButtonClickSound()
-              window.open('https://github.com/imsovikde/Edge-Drop/issues', '_blank')
-            }}
-          >
-            {t('footer.submitFeedback')}
-          </button>
+          <div className="setting-pills">
+            <button
+              type="button"
+              className="pill active"
+              onClick={handleReportIssue}
+              style={{ fontSize: 11 }}
+            >
+              Report Issue ↗
+            </button>
+            <button
+              type="button"
+              className="pill"
+              onClick={handleCopyDiagnostics}
+              style={{ fontSize: 11 }}
+            >
+              Copy Diag
+            </button>
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
             <button
@@ -2689,81 +2725,6 @@ export function Settings({
         </div>
       )
     }
-
-function Toggle({
-  checked,
-  onChange,
-  disabled
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  disabled?: boolean
-}) {
-  const [isHovered, setIsHovered] = useState(false)
-
-  return (
-    <button
-      type="button"
-      className={`setting-toggle${checked ? ' checked' : ''}`}
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={() => {
-        if (disabled) return
-        playToggleSound(!checked)
-        onChange(!checked)
-      }}
-      style={{
-        flexShrink: 0,
-        width: 36,
-        height: 20,
-        borderRadius: 999,
-        background: disabled
-          ? 'rgba(255, 255, 255, 0.05)'
-          : checked
-          ? '#ffffff'
-          : isHovered
-          ? 'rgba(255, 255, 255, 0.18)'
-          : 'rgba(255, 255, 255, 0.12)',
-        border: 'none',
-        position: 'relative',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        padding: 0,
-        outline: 'none',
-        transition: 'background 0.18s ease, opacity 0.18s ease',
-        boxShadow: 'none',
-        opacity: disabled ? 0.38 : 1
-      }}
-    >
-      <motion.span
-        className="toggle-thumb"
-        initial={false}
-        animate={{
-          x: checked ? 19 : 3,
-          backgroundColor: checked ? '#000000' : '#ffffff'
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 520,
-          damping: 32,
-          mass: 0.5
-        }}
-        style={{
-          position: 'absolute',
-          top: 3,
-          left: 0,
-          width: 14,
-          height: 14,
-          borderRadius: '50%',
-          boxShadow: 'none',
-          pointerEvents: 'none'
-        }}
-      />
-    </button>
-  )
-}
 
 function LanguageDropdown({ direction = 'down', compact = false }: { direction?: 'up' | 'down'; compact?: boolean } = {}) {
   const { language, languages } = useTranslation()

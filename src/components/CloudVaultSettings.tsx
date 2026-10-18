@@ -2,11 +2,13 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/appStore'
 import { edge } from '../lib/edge'
+import { Toggle } from './Toggle'
 import { playButtonClickSound, playToggleSound } from '../lib/soundEffects'
 
 export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean }) {
   const settings = useStore((s) => s.settings)
   const patch = useStore((s) => s.patchSettings)
+  const pushToast = useStore((s) => s.pushToast)
   const firebaseUser = useStore((s) => s.firebaseUser)
   const cloudSyncState = useStore((s) => s.cloudSyncState)
 
@@ -21,25 +23,8 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   const [vaultMsg, setVaultMsg] = useState<string | null>(null)
   const [rulesCopied, setRulesCopied] = useState(false)
   const [isSendingVerification, setIsSendingVerification] = useState(false)
-
-  const handleSendVerificationEmail = async () => {
-    playButtonClickSound()
-    setIsSendingVerification(true)
-    setAuthError(null)
-    setAuthSuccess(null)
-    try {
-      const res = await edge.sendVerificationEmail()
-      if (res.ok) {
-        setAuthSuccess(res.message)
-      } else {
-        setAuthError(res.message)
-      }
-    } catch (err: any) {
-      setAuthError(err?.message || 'Failed to send verification email')
-    } finally {
-      setIsSendingVerification(false)
-    }
-  }
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false)
+  const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false)
 
   // ── Keyboard Focus Engagement (WS_EX_NOACTIVATE Window Unlock) ─────────
   const inputEngagedRef = useRef(false)
@@ -86,6 +71,77 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     disengageFocus()
   }, [disengageFocus])
 
+  // ── Email Verification Check & Dispatch ────────────────────────────────
+  const handleCheckVerification = async () => {
+    playButtonClickSound()
+    setIsCheckingVerification(true)
+    setAuthError(null)
+    setAuthSuccess(null)
+    try {
+      const res = await edge.checkEmailVerification()
+      if (res.verified) {
+        setAuthSuccess(res.message)
+        pushToast({ id: 'verify-success', message: res.message, tone: 'info' })
+      } else {
+        setAuthError(res.message)
+        pushToast({ id: 'verify-pending', message: res.message, tone: 'info' })
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to check verification status'
+      setAuthError(msg)
+      pushToast({ id: 'verify-error', message: msg, tone: 'error' })
+    } finally {
+      setIsCheckingVerification(false)
+    }
+  }
+
+  const handleSendVerificationEmail = async () => {
+    playButtonClickSound()
+    setIsSendingVerification(true)
+    setAuthError(null)
+    setAuthSuccess(null)
+    try {
+      const res = await edge.sendVerificationEmail()
+      if (res.ok) {
+        setAuthSuccess(res.message)
+        pushToast({ id: 'verify-sent', message: res.message, tone: 'info' })
+      } else {
+        setAuthError(res.message)
+        pushToast({ id: 'verify-fail', message: res.message, tone: 'error' })
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to send verification email'
+      setAuthError(msg)
+      pushToast({ id: 'verify-err', message: msg, tone: 'error' })
+    } finally {
+      setIsSendingVerification(false)
+    }
+  }
+
+  const handleSendPasswordReset = async () => {
+    playButtonClickSound()
+    setIsSendingPasswordReset(true)
+    setAuthError(null)
+    setAuthSuccess(null)
+    try {
+      const targetEmail = firebaseUser?.email || email.trim()
+      const res = await edge.sendPasswordResetEmail(targetEmail)
+      if (res.ok) {
+        setAuthSuccess(res.message)
+        pushToast({ id: 'reset-sent', message: res.message, tone: 'info' })
+      } else {
+        setAuthError(res.message)
+        pushToast({ id: 'reset-fail', message: res.message, tone: 'error' })
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to send password reset email'
+      setAuthError(msg)
+      pushToast({ id: 'reset-err', message: msg, tone: 'error' })
+    } finally {
+      setIsSendingPasswordReset(false)
+    }
+  }
+
   // ── Auth Handlers ───────────────────────────────────────────────────────
   const handleAnonymousSignIn = async () => {
     playButtonClickSound()
@@ -95,6 +151,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       await edge.signInAnonymous()
       setAuthSuccess('Signed in as Guest with cloud backup active!')
+      pushToast({ id: 'anon-ok', message: 'Guest vault activated with continuous cloud backup', tone: 'info' })
     } catch (err: any) {
       setAuthError(err?.message || 'Guest sign-in failed')
     } finally {
@@ -114,10 +171,12 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       if (isRegister) {
         await edge.signUpEmail(email.trim(), password.trim())
-        setAuthSuccess('Account created and signed in successfully!')
+        setAuthSuccess('Account created! A verification link was dispatched to your email.')
+        pushToast({ id: 'reg-ok', message: 'Account created! Verification link sent to your email.', tone: 'info' })
       } else {
         await edge.signInEmail(email.trim(), password.trim())
         setAuthSuccess('Signed in successfully!')
+        pushToast({ id: 'login-ok', message: 'Signed in successfully! Vault connected.', tone: 'info' })
       }
       setEmail('')
       setPassword('')
@@ -136,6 +195,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       await edge.signOut()
       setAuthSuccess('Signed out. Local clipboard items preserved.')
+      pushToast({ id: 'signout-ok', message: 'Signed out. Local clipboard items preserved.', tone: 'info' })
     } catch (err: any) {
       setAuthError(err?.message || 'Failed to sign out')
     } finally {
@@ -151,6 +211,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       await edge.forceSync()
       setAuthSuccess('Force sync complete: local and cloud vaults reconciled.')
+      pushToast({ id: 'sync-ok', message: 'Force sync complete: vaults reconciled.', tone: 'info' })
     } catch (err: any) {
       setAuthError(err?.message || 'Force sync failed')
     } finally {
@@ -162,6 +223,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     playButtonClickSound()
     try {
       await edge.triggerSync()
+      pushToast({ id: 'sync-triggered', message: 'Sync cycle initiated in background.', tone: 'info' })
     } catch (err: any) {
       setAuthError(err?.message || 'Sync failed to trigger')
     }
@@ -175,7 +237,9 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       const res = await edge.exportVault()
       if (res.success) {
-        setVaultMsg(`Exported ${res.itemCount} items (${res.imageCount} images) to ${res.path}`)
+        const msg = `Exported ${res.itemCount} items (${res.imageCount} images) to ${res.path}`
+        setVaultMsg(msg)
+        pushToast({ id: 'export-ok', message: msg, tone: 'info' })
       }
     } catch (err: any) {
       setAuthError(err?.message || 'Export failed')
@@ -192,7 +256,9 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       const res = await edge.importVault()
       if (res.success) {
-        setVaultMsg(`Restored ${res.restoredItems} items (${res.restoredImages} images) successfully.`)
+        const msg = `Restored ${res.restoredItems} items (${res.restoredImages} images) successfully.`
+        setVaultMsg(msg)
+        pushToast({ id: 'import-ok', message: msg, tone: 'info' })
       }
     } catch (err: any) {
       setAuthError(err?.message || 'Import failed')
@@ -214,6 +280,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
         setConfigFeedback(`Connected to Firebase project "${res.config.projectId}"! DPAPI encrypted at rest.`)
         setShowConfigInput(false)
         setCustomConfigInput('')
+        pushToast({ id: 'byo-ok', message: `Connected to project "${res.config.projectId}"!`, tone: 'info' })
       } else {
         setAuthError(res.error || 'Failed to verify custom Firebase configuration.')
       }
@@ -231,6 +298,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       await edge.resetCustomFirebaseConfig()
       setConfigFeedback('Reset to default Edge-Drop cloud backend.')
+      pushToast({ id: 'byo-reset', message: 'Reset to default Edge-Drop cloud backend.', tone: 'info' })
     } catch (err: any) {
       setAuthError(err?.message || 'Failed to reset custom config')
     } finally {
@@ -265,7 +333,31 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     navigator.clipboard.writeText(rulesText).then(() => {
       setRulesCopied(true)
       setTimeout(() => setRulesCopied(false), 2500)
+      pushToast({ id: 'rules-copied', message: 'Security rules copied to clipboard!', tone: 'info' })
     }).catch(() => {})
+  }
+
+  // ── One-Click Issue Diagnostics ────────────────────────────────────────
+  const handleReportIssue = async () => {
+    playButtonClickSound()
+    try {
+      const diag = await edge.getDiagnostics()
+      const url = `https://github.com/imsovikde/Edge-Drop/issues/new?title=%5BBug%5D%3A+&body=${encodeURIComponent(diag)}`
+      window.open(url, '_blank')
+    } catch {
+      window.open('https://github.com/imsovikde/Edge-Drop/issues/new', '_blank')
+    }
+  }
+
+  const handleCopyDiagnostics = async () => {
+    playButtonClickSound()
+    try {
+      const diag = await edge.getDiagnostics()
+      await navigator.clipboard.writeText(diag)
+      pushToast({ id: 'diag-copy', message: 'Diagnostics copied to clipboard!', tone: 'info' })
+    } catch {
+      pushToast({ id: 'diag-copy-err', message: 'Failed to copy diagnostics', tone: 'error' })
+    }
   }
 
   // Status Beacon Calculation
@@ -291,11 +383,308 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
           : `Linked: ${firebaseUser.email || firebaseUser.displayName || firebaseUser.uid.slice(0, 10)}`
         : 'Local Storage Only (Unlinked)'
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // HORIZONTAL SHELF RENDERING (Top / Bottom Dock Position)
+  // ──────────────────────────────────────────────────────────────────────────
+  if (isHorizontal) {
+    return (
+      <>
+        {/* ── Sub-group Divider ── */}
+        <div className="shelf-section-divider">
+          <span className="shelf-section-divider-text">VAULT & SYNC</span>
+        </div>
+
+        {/* Card 1: Cloud Sync Status Beacon */}
+        <div className="settings-shelf-card vault-shelf-card">
+          <div className="shelf-card-top">
+            <div className="setting-group-label">STATUS & VAULT BEACON</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '2px 0' }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: statusBeaconColor,
+                  boxShadow: `0 0 8px ${statusBeaconColor}88`,
+                  flexShrink: 0
+                }}
+              />
+              <div className="setting-title" style={{ fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {statusText}
+              </div>
+            </div>
+            <div className="setting-desc" style={{ fontSize: 10.5, lineHeight: 1.3 }}>
+              {isConnected
+                ? 'Clipboard clips, images, and stacks are automatically synced.'
+                : 'Connect an account to enable automatic multi-device sync.'}
+            </div>
+          </div>
+          <div className="shelf-card-bottom">
+            {isConnected ? (
+              <div className="setting-pills">
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={handleTriggerSync}
+                  disabled={isSyncing}
+                >
+                  Sync Now
+                </button>
+                <button
+                  type="button"
+                  className="pill active"
+                  onClick={handleForceSync}
+                  disabled={isSubmitting}
+                >
+                  Force Sync
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="pill active"
+                onClick={handleAnonymousSignIn}
+                disabled={isSubmitting}
+                style={{ width: '100%' }}
+              >
+                Instant Guest Vault
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Card 2: Account Access & Verification */}
+        <div className="settings-shelf-card vault-auth-card">
+          <div className="shelf-card-top">
+            <div className="setting-group-label">ACCOUNT & VERIFICATION</div>
+            {isConnected ? (
+              <div>
+                <div className="setting-title" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {firebaseUser.isAnonymous ? 'Guest User' : firebaseUser.email || 'Connected Account'}
+                </div>
+                {!firebaseUser.isAnonymous && firebaseUser.email && (
+                  <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {firebaseUser.emailVerified ? (
+                      <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                        ✓ Email Verified
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                        ⚠ Email Unverified
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <input
+                  type="email"
+                  className="vault-input"
+                  style={{ height: 26, padding: '2px 8px', fontSize: 11 }}
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onPointerDown={engageFocus}
+                  onFocus={engageFocus}
+                  onBlur={disengageFocus}
+                  spellCheck={false}
+                />
+                <input
+                  type="password"
+                  className="vault-input"
+                  style={{ height: 26, padding: '2px 8px', fontSize: 11 }}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onPointerDown={engageFocus}
+                  onFocus={engageFocus}
+                  onBlur={disengageFocus}
+                />
+              </div>
+            )}
+          </div>
+          <div className="shelf-card-bottom">
+            {isConnected ? (
+              <div className="setting-pills">
+                {!firebaseUser.isAnonymous && !firebaseUser.emailVerified && (
+                  <button
+                    type="button"
+                    className="pill active"
+                    onClick={handleCheckVerification}
+                    disabled={isCheckingVerification}
+                    title="Check verification status if you already clicked the link in your email"
+                  >
+                    {isCheckingVerification ? 'Checking...' : 'Check Status'}
+                  </button>
+                )}
+                {!firebaseUser.isAnonymous && (
+                  <button
+                    type="button"
+                    className="pill"
+                    onClick={handleSendPasswordReset}
+                    disabled={isSendingPasswordReset}
+                    title="Send password reset link to your email"
+                  >
+                    {isSendingPasswordReset ? 'Sending...' : 'Reset Pass'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="pill danger"
+                  onClick={handleSignOut}
+                  disabled={isSubmitting}
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <div className="setting-pills">
+                <button
+                  type="button"
+                  className="pill active"
+                  onClick={() => handleEmailAuth(false)}
+                  disabled={isSubmitting}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={() => handleEmailAuth(true)}
+                  disabled={isSubmitting}
+                >
+                  Register
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 3: Continuous Cloud Sync Toggle */}
+        <div className="settings-shelf-card vault-sync-card">
+          <div className="shelf-card-top">
+            <div className="setting-group-label">PREFERENCES</div>
+          </div>
+          <div className="shelf-card-inline">
+            <div className="shelf-card-inline-text">
+              <div className="setting-title">Continuous Cloud Sync</div>
+              <div className="setting-desc">Auto-sync clips and images across devices</div>
+            </div>
+            <div className="shelf-card-inline-action">
+              <Toggle
+                checked={settings.cloudSyncEnabled ?? true}
+                onChange={(v) => {
+                  playToggleSound(v)
+                  patch({ cloudSyncEnabled: v })
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Local Snapshot & Archive (.edvault) */}
+        <div className="settings-shelf-card vault-backup-card">
+          <div className="shelf-card-top">
+            <div className="setting-group-label">LOCAL SNAPSHOT</div>
+            <div className="setting-title">Vault Archive (.edvault)</div>
+            <div className="setting-desc">Export or restore offline vault backup</div>
+          </div>
+          <div className="shelf-card-bottom">
+            <div className="setting-pills">
+              <button
+                type="button"
+                className="pill"
+                onClick={handleExportVault}
+                disabled={isSubmitting}
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                className="pill"
+                onClick={handleImportVault}
+                disabled={isSubmitting}
+              >
+                Restore
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Custom Firebase Backend */}
+        <div className="settings-shelf-card vault-byo-card">
+          <div className="shelf-card-top">
+            <div className="setting-group-label">CUSTOM BACKEND</div>
+            <div className="setting-title">Bring Your Own Firebase</div>
+            <div className="setting-desc">
+              {settings.customFirebaseConfig ? 'Custom database connected' : 'Override with own project'}
+            </div>
+          </div>
+          <div className="shelf-card-bottom">
+            <div className="setting-pills">
+              <button
+                type="button"
+                className="pill"
+                onClick={() => {
+                  playButtonClickSound()
+                  setShowConfigInput(!showConfigInput)
+                }}
+              >
+                {showConfigInput ? 'Hide' : 'Configure'}
+              </button>
+              {settings.customFirebaseConfig && (
+                <button
+                  type="button"
+                  className="pill danger"
+                  onClick={handleResetCustomConfig}
+                  disabled={isSubmitting}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 6: One-Click Diagnostics & Reporting */}
+        <div className="settings-shelf-card vault-diag-card">
+          <div className="shelf-card-top">
+            <div className="setting-group-label">DIAGNOSTICS & HELP</div>
+            <div className="setting-title">Report Issue</div>
+            <div className="setting-desc">One-click issue template with pre-filled device info</div>
+          </div>
+          <div className="shelf-card-bottom">
+            <div className="setting-pills">
+              <button
+                type="button"
+                className="pill active"
+                onClick={handleReportIssue}
+              >
+                Report ↗
+              </button>
+              <button
+                type="button"
+                className="pill"
+                onClick={handleCopyDiagnostics}
+              >
+                Copy Diag
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // VERTICAL STACK RENDERING (Left / Right Dock Position)
+  // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className={isHorizontal ? 'shelf-card-col' : undefined}>
+    <>
       {/* ── Section Divider ── */}
-      <div className={isHorizontal ? 'shelf-section-divider' : 'setting-section-divider'}>
-        <span className={isHorizontal ? 'shelf-section-divider-text' : 'setting-section-divider-text'}>
+      <div className="setting-section-divider">
+        <span className="setting-section-divider-text">
           CLOUD VAULT & MULTI-DEVICE SYNC
         </span>
       </div>
@@ -304,14 +693,22 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
       {authError && (
         <div className="vault-error-banner" style={{ margin: '0 0 10px 0' }}>
           <div>{authError}</div>
-          <a
-            href="https://github.com/imsovikde/Edge-Drop/issues/new?title=Cloud%20Vault%20Issue"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: '#ff8a80', fontSize: '11px', textDecoration: 'underline' }}
+          <button
+            type="button"
+            onClick={handleReportIssue}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              color: '#ff8a80',
+              fontSize: '11px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
           >
-            Report Issue on GitHub ↗
-          </a>
+            Report Issue on GitHub (Auto-filled Diagnostics) ↗
+          </button>
         </div>
       )}
 
@@ -328,20 +725,23 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
       )}
 
       {/* Card 1: Cloud Sync Status Beacon */}
-      <div className="vault-card">
-        <div className="vault-card-header">
-          <div className="vault-card-label">STATUS & VAULT BEACON</div>
-          <div className="vault-beacon-wrap">
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">STATUS & VAULT BEACON</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
             <span
-              className="vault-beacon"
               style={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
                 background: statusBeaconColor,
-                boxShadow: `0 0 8px ${statusBeaconColor}88`
+                boxShadow: `0 0 8px ${statusBeaconColor}88`,
+                flexShrink: 0
               }}
             />
-            <div className="vault-card-title">{statusText}</div>
+            <div className="setting-title">{statusText}</div>
           </div>
-          <div className="vault-card-desc">
+          <div className="setting-desc">
             {isConnected
               ? 'Your clipboard history, high-res images, and stacks are automatically backed up and synced in real-time.'
               : 'Sign in to automatically sync your clipboard history and images across your desktop devices.'}
@@ -354,75 +754,99 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
         </div>
 
         {isConnected && (
-          <div className="vault-grid-2">
-            <button
-              type="button"
-              className="vault-btn-secondary"
-              onClick={handleTriggerSync}
-              disabled={isSyncing}
-            >
-              Sync Now
-            </button>
-            <button
-              type="button"
-              className="vault-btn-primary"
-              onClick={handleForceSync}
-              disabled={isSubmitting}
-            >
-              Force Sync
-            </button>
+          <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
+            <div className="setting-pills">
+              <button
+                type="button"
+                className="pill"
+                onClick={handleTriggerSync}
+                disabled={isSyncing}
+              >
+                Sync Now
+              </button>
+              <button
+                type="button"
+                className="pill active"
+                onClick={handleForceSync}
+                disabled={isSubmitting}
+              >
+                Force Sync
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Card 2: Authentication Controls */}
-      <div className="vault-card">
-        <div className="vault-card-header">
-          <div className="vault-card-label">ACCOUNT ACCESS</div>
+      {/* Card 2: Authentication & Account Controls */}
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">ACCOUNT ACCESS</div>
         </div>
 
         {isConnected ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <div className="vault-card-title">
+              <div className="setting-title">
                 {firebaseUser.isAnonymous ? 'Guest Account' : firebaseUser.email || 'Connected Account'}
               </div>
-              <div className="vault-card-desc">
+              <div className="setting-desc">
                 Provider: {firebaseUser.providerId || 'firebase'} • UID: {firebaseUser.uid.slice(0, 14)}...
               </div>
               {!firebaseUser.isAnonymous && firebaseUser.email && (
-                <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   {firebaseUser.emailVerified ? (
-                    <span style={{ fontSize: '11px', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
+                    <span style={{ fontSize: '12px', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
                       ✓ Email Verified
                     </span>
                   ) : (
-                    <>
-                      <span style={{ fontSize: '11px', color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
+                      <span style={{ fontSize: '12px', color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
                         ⚠ Email Unverified
                       </span>
-                      <button
-                        type="button"
-                        className="vault-btn-secondary"
-                        style={{ padding: '3px 8px', fontSize: '11px', height: 'auto', minHeight: 'unset' }}
-                        onClick={handleSendVerificationEmail}
-                        disabled={isSendingVerification}
-                      >
-                        {isSendingVerification ? 'Sending...' : 'Resend Verification Email'}
-                      </button>
-                    </>
+                      <div className="setting-pills" style={{ marginTop: 4 }}>
+                        <button
+                          type="button"
+                          className="pill active"
+                          onClick={handleCheckVerification}
+                          disabled={isCheckingVerification}
+                        >
+                          {isCheckingVerification ? 'Checking...' : 'Check Verification Status'}
+                        </button>
+                        <button
+                          type="button"
+                          className="pill"
+                          onClick={handleSendVerificationEmail}
+                          disabled={isSendingVerification}
+                        >
+                          {isSendingVerification ? 'Sending...' : 'Resend Email'}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              className="vault-btn-danger"
-              onClick={handleSignOut}
-              disabled={isSubmitting}
-            >
-              Sign Out
-            </button>
+
+            <div className="setting-pills" style={{ marginTop: 4 }}>
+              {!firebaseUser.isAnonymous && (
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={handleSendPasswordReset}
+                  disabled={isSendingPasswordReset}
+                >
+                  {isSendingPasswordReset ? 'Sending...' : 'Change Password'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="pill danger"
+                onClick={handleSignOut}
+                disabled={isSubmitting}
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -454,10 +878,10 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
               }}
             />
 
-            <div className="vault-grid-2">
+            <div className="setting-pills">
               <button
                 type="button"
-                className="vault-btn-primary"
+                className="pill active"
                 onClick={() => handleEmailAuth(false)}
                 disabled={isSubmitting}
               >
@@ -465,7 +889,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
               </button>
               <button
                 type="button"
-                className="vault-btn-secondary"
+                className="pill"
                 onClick={() => handleEmailAuth(true)}
                 disabled={isSubmitting}
               >
@@ -483,9 +907,10 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
 
             <button
               type="button"
-              className="vault-btn-secondary"
+              className="pill"
               onClick={handleAnonymousSignIn}
               disabled={isSubmitting}
+              style={{ width: '100%', height: 32 }}
             >
               Continue as Guest (Instant Cloud Vault)
             </button>
@@ -521,98 +946,99 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
         )}
       </div>
 
-      {/* Card 3: Cloud Sync Preferences */}
-      <div className="vault-card">
-        <div className="vault-card-header">
-          <div className="vault-card-label">PREFERENCES</div>
+      {/* Card 3: Continuous Cloud Sync Preference */}
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">PREFERENCES</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-          <div style={{ flex: 1 }}>
-            <div className="vault-card-title">Continuous Cloud Sync</div>
-            <div className="vault-card-desc">Automatically upload newly captured items and download remote updates.</div>
+        <div className="shelf-card-inline">
+          <div className="shelf-card-inline-text">
+            <div className="setting-title">Continuous Cloud Sync</div>
+            <div className="setting-desc">Automatically upload newly captured items and download remote updates.</div>
           </div>
-          <button
-            type="button"
-            className={`setting-toggle${settings.cloudSyncEnabled ?? true ? ' checked' : ''}`}
-            onClick={() => {
-              const next = !(settings.cloudSyncEnabled ?? true)
-              playToggleSound(next)
-              patch({ cloudSyncEnabled: next })
-            }}
-          >
-            <span className="toggle-thumb" />
-          </button>
+          <div className="shelf-card-inline-action">
+            <Toggle
+              checked={settings.cloudSyncEnabled ?? true}
+              onChange={(v) => {
+                playToggleSound(v)
+                patch({ cloudSyncEnabled: v })
+              }}
+            />
+          </div>
         </div>
       </div>
 
       {/* Card 4: Local Snapshot & Offline Vault (.edvault) */}
-      <div className="vault-card">
-        <div className="vault-card-header">
-          <div className="vault-card-label">LOCAL SNAPSHOT & OFFLINE VAULT</div>
-          <div className="vault-card-title">Snapshot Archive (.edvault)</div>
-          <div className="vault-card-desc">
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">LOCAL SNAPSHOT & OFFLINE VAULT</div>
+          <div className="setting-title">Snapshot Archive (.edvault)</div>
+          <div className="setting-desc">
             Export all clipboard history, binary images, and settings into a single compressed .edvault archive for offline migration or backup.
           </div>
         </div>
 
-        <div className="vault-grid-2">
-          <button
-            type="button"
-            className="vault-btn-secondary"
-            onClick={handleExportVault}
-            disabled={isSubmitting}
-          >
-            Export .edvault
-          </button>
-          <button
-            type="button"
-            className="vault-btn-secondary"
-            onClick={handleImportVault}
-            disabled={isSubmitting}
-          >
-            Restore .edvault
-          </button>
+        <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
+          <div className="setting-pills">
+            <button
+              type="button"
+              className="pill"
+              onClick={handleExportVault}
+              disabled={isSubmitting}
+            >
+              Export .edvault
+            </button>
+            <button
+              type="button"
+              className="pill"
+              onClick={handleImportVault}
+              disabled={isSubmitting}
+            >
+              Restore .edvault
+            </button>
+          </div>
         </div>
 
         {vaultMsg && (
-          <div style={{ fontSize: '11px', color: '#10b981', marginTop: '2px' }}>
+          <div style={{ fontSize: '11px', color: '#10b981', marginTop: '4px' }}>
             ✓ {vaultMsg}
           </div>
         )}
       </div>
 
       {/* Card 5: Custom Firebase Configuration (BYO Database) */}
-      <div className="vault-card">
-        <div className="vault-card-header">
-          <div className="vault-card-label">CUSTOM FIREBASE CONFIGURATION</div>
-          <div className="vault-card-title">Bring Your Own Firebase</div>
-          <div className="vault-card-desc">
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">CUSTOM FIREBASE CONFIGURATION</div>
+          <div className="setting-title">Bring Your Own Firebase</div>
+          <div className="setting-desc">
             Override the default cloud database with your own Firebase project. Config is validated with a live preflight check and encrypted via Windows DPAPI.
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            type="button"
-            className="vault-btn-secondary"
-            onClick={() => {
-              playButtonClickSound()
-              setShowConfigInput(!showConfigInput)
-            }}
-            style={{ flex: 1 }}
-          >
-            {showConfigInput ? 'Hide Configuration' : 'Configure Custom Database'}
-          </button>
-          {settings.customFirebaseConfig && (
+        <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
+          <div className="setting-pills">
             <button
               type="button"
-              className="vault-btn-danger"
-              onClick={handleResetCustomConfig}
-              disabled={isSubmitting}
+              className="pill"
+              onClick={() => {
+                playButtonClickSound()
+                setShowConfigInput(!showConfigInput)
+              }}
             >
-              Reset
+              {showConfigInput ? 'Hide Configuration' : 'Configure Custom Database'}
             </button>
-          )}
+            {settings.customFirebaseConfig && (
+              <button
+                type="button"
+                className="pill danger"
+                onClick={handleResetCustomConfig}
+                disabled={isSubmitting}
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
 
         <AnimatePresence>
@@ -621,7 +1047,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px' }}
             >
               <textarea
                 className="vault-textarea"
@@ -635,10 +1061,10 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                 spellCheck={false}
               />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+              <div className="setting-pills">
                 <button
                   type="button"
-                  className="vault-btn-secondary"
+                  className="pill"
                   onClick={handleCopySetupRules}
                   style={{ fontSize: '11px' }}
                 >
@@ -646,7 +1072,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                 </button>
                 <button
                   type="button"
-                  className="vault-btn-primary"
+                  className="pill active"
                   onClick={handleVerifyAndConnect}
                   disabled={isSubmitting || !customConfigInput.trim()}
                 >
@@ -668,7 +1094,35 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
           )}
         </AnimatePresence>
       </div>
-    </div>
+
+      {/* Card 6: One-Click Diagnostics & GitHub Issue Template */}
+      <div className="setting-card">
+        <div className="shelf-card-top">
+          <div className="setting-group-label">DIAGNOSTICS & BUG REPORTING</div>
+          <div className="setting-title">Automated Issue Diagnostics</div>
+          <div className="setting-desc">
+            Instantly prepare an issue report with your non-sensitive system environment, app version, screen scale, and sync state pre-filled.
+          </div>
+        </div>
+        <div className="shelf-card-bottom" style={{ marginTop: 8 }}>
+          <div className="setting-pills">
+            <button
+              type="button"
+              className="pill active"
+              onClick={handleReportIssue}
+            >
+              Report Issue (Auto-filled) ↗
+            </button>
+            <button
+              type="button"
+              className="pill"
+              onClick={handleCopyDiagnostics}
+            >
+              Copy Diagnostics
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
-
