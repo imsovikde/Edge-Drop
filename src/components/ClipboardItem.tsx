@@ -35,6 +35,7 @@ import { parseColor } from '../lib/colorUtils'
 import { useTranslation, t } from '../i18n'
 import { useRelativeTimeTick } from '../hooks/useRelativeTimeTick'
 import { useAdaptiveSpring } from '../hooks/useAdaptiveSpring'
+import { hasMacroTokens } from '../lib/macroEngine'
 
 export const RelativeTime = memo(function RelativeTime({ capturedAt }: { capturedAt: number }) {
   useRelativeTimeTick()
@@ -591,6 +592,25 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
                     </>
                   )}
                   {copied && <span className="meta-copied">· {t('item.copied')}</span>}
+                  {item.data.kind === 'text' && hasMacroTokens(item.data.text) && (
+                    <span
+                      className="meta-macro-badge"
+                      title="Dynamic snippet template: tokens like {{date}}, {{time}}, {{uuid}} expand automatically upon copy"
+                      style={{
+                        fontSize: 9,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        color: '#60a5fa',
+                        fontWeight: 600,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      Macro
+                    </span>
+                  )}
                 </div>
                 <RelativeTime capturedAt={item.capturedAt} />
               </div>

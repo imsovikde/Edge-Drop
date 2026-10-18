@@ -28,6 +28,7 @@ import { isPasteableEmoji } from '../../shared/emoji'
 import { emojiAssetDir, readEmojiBatch } from './imageProtocol'
 import { authManager } from '../backup/authManager'
 import { syncEngine } from '../backup/syncEngine'
+import { hasMacroTokens, expandMacroTokens } from '../../shared/macroEngine'
 import { encryptCustomConfig, parseAnyFirebaseConfigInput, verifyFirebaseConnectivity, reinitializeFirebase, testFirebaseConnectivity } from '../backup/firebaseConfig'
 import { localVault } from '../backup/localVault'
 import { getSystemDiagnostics } from './diagnostics'
@@ -498,12 +499,17 @@ export function registerIpc(): void {
     const watcher = getWatcher()
     watcher.setPaused(true)
     const fullText = item.data.kind === 'text' ? getStore().getFullText(id) : undefined
-    const itemDataWithFullText = item.data.kind === 'text' && fullText ? { ...item.data, text: fullText } : item.data
+    let itemDataWithFullText = item.data.kind === 'text' && fullText ? { ...item.data, text: fullText } : item.data
+    if (itemDataWithFullText.kind === 'text' && hasMacroTokens(itemDataWithFullText.text)) {
+      const currentClipboard = clipboard.readText()
+      const expanded = expandMacroTokens(itemDataWithFullText.text, { clipboardText: currentClipboard })
+      itemDataWithFullText = { ...itemDataWithFullText, text: expanded }
+    }
     const ok = await writeItemToClipboard(itemDataWithFullText, item.capturedAt)
     if (!ok) {
       // Source content (e.g. the staged image file) is unrecoverable. Do not
-      // promote a dead item to the top of history — tell the user instead.
-      console.log('[IPC] item:copy aborted — source content unavailable')
+      // promote a dead item to the top of history - tell the user instead.
+      console.log('[IPC] item:copy aborted - source content unavailable')
       toast('toast.imageUnavailable', 'error')
       setTimeout(() => {
         watcher.setPaused(loadSettings().incognito)
