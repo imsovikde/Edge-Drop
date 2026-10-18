@@ -450,7 +450,9 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   const statusText = isError
     ? cloudSyncState?.error ? `Sync Alert: ${cloudSyncState.error}` : (authError || 'Sync error or offline')
     : isSyncing
-      ? 'Syncing in progress...'
+      ? cloudSyncState?.progress
+        ? `${cloudSyncState.progress.stage} (${cloudSyncState.progress.current}/${cloudSyncState.progress.total})`
+        : 'Syncing in progress...'
       : isConnected
         ? firebaseUser.isAnonymous
           ? 'Guest Vault Active'
@@ -944,6 +946,23 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                   <span className="vault-telemetry-label">WAL Pending</span>
                   <span className="vault-telemetry-val">
                     {cloudSyncState?.pendingMutations ?? 0}
+                  </span>
+                </div>
+                <div className="vault-telemetry-cell">
+                  <span className="vault-telemetry-label">Network</span>
+                  <span
+                    className="vault-telemetry-val"
+                    style={{
+                      color:
+                        cloudSyncState?.networkQuality === 'optimal'
+                          ? '#10b981'
+                          : cloudSyncState?.networkQuality === 'moderate'
+                          ? '#ffb300'
+                          : '#f87171',
+                      textTransform: 'capitalize'
+                    }}
+                  >
+                    {cloudSyncState?.networkQuality || 'Optimal'}
                   </span>
                 </div>
               </div>

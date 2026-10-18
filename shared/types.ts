@@ -275,6 +275,13 @@ export interface CustomFirebaseConfig {
 }
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'error' | 'offline' | 'success'
+export type NetworkQuality = 'optimal' | 'moderate' | 'constrained'
+
+export interface SyncProgress {
+  current: number
+  total: number
+  stage: string
+}
 
 export interface CloudSyncState {
   status: CloudSyncStatus
@@ -284,6 +291,8 @@ export interface CloudSyncState {
   user: FirebaseUserDto | null
   latencyMs?: number
   cloudItemCount?: number
+  networkQuality?: NetworkQuality
+  progress?: SyncProgress | null
 }
 
 export interface RollingBackupMetadata {

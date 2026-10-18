@@ -131,6 +131,18 @@ app.whenReady().then(() => {
     } catch {
       /* ignore */
     }
+  } else {
+    // Elevate priority during cold boot so Windows DWM window creation, icon caching, and initial renderer hydration complete instantly (<50ms) without preemption
+    try {
+      os.setPriority(0, os.constants.priority.PRIORITY_ABOVE_NORMAL)
+      setTimeout(() => {
+        try {
+          os.setPriority(0, os.constants.priority.PRIORITY_NORMAL)
+        } catch { /* ignore */ }
+      }, 3500)
+    } catch {
+      /* ignore */
+    }
   }
   if (!settings.tutorialCompleted && !hiddenLaunch) {
     // When onboarding is active (initial launch or reset tutorial), reset language to system default so onboarding always begins in System Default

@@ -24,8 +24,10 @@
 
 !macro customFinishPage
   Function StartAppFast
-    # Instantly launch Edge-Drop executable directly via ShellExecute without blocking NSIS or stalling on StdUtils shell link resolution
-    ExecShell "open" "$appExe"
+    # Instantly launch Edge-Drop detached via Windows Explorer shell to ensure:
+    # 1. Zero-delay return (<5ms) so the NSIS finish page never hangs or displays "Not Responding"
+    # 2. Execution at standard user Medium Integrity Level, preventing Windows UIPI from blocking drag-and-drop operations
+    Exec '"$WINDIR\explorer.exe" "$appExe"'
   FunctionEnd
 
   !define MUI_FINISHPAGE_RUN

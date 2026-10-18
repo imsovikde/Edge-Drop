@@ -44,6 +44,15 @@ class AdaptiveGovernor {
   private isSuspended = false
   private syncCallback: ((entries: WalEntry[]) => Promise<void | SyncResult>) | null = null
   private isFlushing = false
+  private networkQuality: 'optimal' | 'moderate' | 'constrained' = 'optimal'
+
+  public setNetworkQuality(quality: 'optimal' | 'moderate' | 'constrained'): void {
+    this.networkQuality = quality
+  }
+
+  public getNetworkQuality(): 'optimal' | 'moderate' | 'constrained' {
+    return this.networkQuality
+  }
 
   public init(syncCb: (entries: WalEntry[]) => Promise<void | SyncResult>): void {
     this.syncCallback = syncCb
@@ -162,6 +171,9 @@ class AdaptiveGovernor {
 
     // 50ms for high-priority AC copies, 300ms base, 1200ms on battery
     let windowMs = this.isOnBattery ? 1200 : (highPriority ? 50 : 300)
+    if (this.networkQuality === 'constrained' && !highPriority) {
+      windowMs = Math.max(windowMs, 1500)
+    }
 
     if (maxRetry > 0) {
       // Exponential backoff with jitter: 2^retry * base, capped at 30 seconds

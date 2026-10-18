@@ -16,12 +16,35 @@ import { authManager } from './authManager'
 import { adaptiveGovernor, WalEntry, type SyncResult } from './adaptiveGovernor'
 import { atomicWriteFileSync, computeSha256, sanitizeSafePath } from './cryptoIntegrity'
 import { syncWorker } from './syncWorker'
-import { ClipboardItem, CloudSyncState, CloudSyncStatus, Settings } from '../../shared/types'
+import { ClipboardItem, CloudSyncState, CloudSyncStatus, Settings, NetworkQuality, SyncProgress } from '../../shared/types'
 import { getStore, loadSettings, saveSettings, pushState } from '../main/state'
 import { PATHS } from '../store/paths'
 
 const SYNC_INTERVAL_AC_MS = 20_000
 const SYNC_INTERVAL_BATTERY_MS = 300_000
+
+/**
+ * Executes an async worker across an array of items with bounded concurrency.
+ * Minimizes CPU and socket exhaustion on constrained devices and networks.
+ */
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let currentIndex = 0
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (currentIndex < items.length) {
+      const idx = currentIndex++
+      results[idx] = await worker(items[idx], idx)
+    }
+  })
+
+  await Promise.all(runners)
+  return results
+}
 
 function toFsValue(v: any): any {
   if (v === null || v === undefined) return { nullValue: null }
@@ -123,6 +146,8 @@ class SyncEngine {
   private lastSyncCursor: number = 0
   private isPowerMonitoring = false
   private currentIntervalMs = SYNC_INTERVAL_AC_MS
+  private networkQuality: NetworkQuality = 'optimal'
+  private currentProgress: SyncProgress | null = null
 
   public init(): void {
     this.setupPowerMonitor()
@@ -142,6 +167,15 @@ class SyncEngine {
     })
   }
 
+  public getNetworkQuality(): NetworkQuality {
+    return this.networkQuality
+  }
+
+  public setProgress(progress: SyncProgress | null): void {
+    this.currentProgress = progress
+    this.notifyStateChanged()
+  }
+
   public getState(): CloudSyncState {
     return {
       status: this.status,
@@ -150,7 +184,9 @@ class SyncEngine {
       pendingMutations: adaptiveGovernor.getPendingCount(),
       user: authManager.getCurrentUser(),
       latencyMs: this.lastLatencyMs ?? undefined,
-      cloudItemCount: this.cloudItemCount
+      cloudItemCount: this.cloudItemCount,
+      networkQuality: this.networkQuality,
+      progress: this.currentProgress
     }
   }
 
@@ -195,23 +231,52 @@ class SyncEngine {
     }
   }
 
-  private async fetchFirestore(path: string, options: RequestInit = {}): Promise<Response> {
+  private async fetchFirestore(path: string, options: RequestInit = {}, maxRetries = 2): Promise<Response> {
     const config = getActiveFirebaseConfig()
     if (!config?.projectId) throw new Error('Firestore project ID is missing')
-
-    const token = await authManager.getFreshIdToken()
-    if (!token) throw new Error('Unauthenticated: No active Firebase ID token available')
 
     const cleanPath = path.startsWith('/') ? path.slice(1) : path
     const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/${cleanPath}`
 
-    const headers = new Headers(options.headers || {})
-    headers.set('Authorization', `Bearer ${token}`)
-    if (options.body && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json')
+    const isBlob = cleanPath.includes('/blobs/')
+    const defaultTimeoutMs = isBlob ? 25_000 : 10_000
+
+    let lastError: any = null
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const token = await authManager.getFreshIdToken()
+        if (!token) throw new Error('Unauthenticated: No active Firebase ID token available')
+
+        const headers = new Headers(options.headers || {})
+        headers.set('Authorization', `Bearer ${token}`)
+        if (options.body && !headers.has('Content-Type')) {
+          headers.set('Content-Type', 'application/json')
+        }
+
+        const res = await fetch(url, {
+          ...options,
+          headers,
+          signal: options.signal || AbortSignal.timeout(defaultTimeoutMs)
+        })
+
+        // Retry on server errors (500, 502, 503, 504) or rate limit (429)
+        if (!res.ok && (res.status === 429 || res.status >= 500) && attempt < maxRetries) {
+          const delay = Math.min(2000, 300 * Math.pow(2, attempt) + Math.random() * 200)
+          await new Promise((r) => setTimeout(r, delay))
+          continue
+        }
+
+        return res
+      } catch (err: any) {
+        lastError = err
+        if (attempt < maxRetries) {
+          const delay = Math.min(2000, 300 * Math.pow(2, attempt) + Math.random() * 200)
+          await new Promise((r) => setTimeout(r, delay))
+        }
+      }
     }
 
-    return fetch(url, { ...options, headers, signal: options.signal || AbortSignal.timeout(15_000) })
+    throw lastError || new Error(`Firestore request failed after ${maxRetries + 1} attempts`)
   }
 
   public async triggerSync(): Promise<void> {
@@ -230,9 +295,11 @@ class SyncEngine {
 
     try {
       // 1. Flush local write-ahead log mutations
+      this.setProgress({ current: 0, total: 3, stage: 'Flushing mutations' })
       await adaptiveGovernor.flushNow()
 
       // 2. Commit current local settings to cloud
+      this.setProgress({ current: 1, total: 3, stage: 'Synchronizing settings' })
       const currentSettings = loadSettings()
       const cleanSettings = { ...currentSettings, updatedAt: Date.now() }
       const settingsRes = await this.fetchFirestore(`users/${encodeURIComponent(user.uid)}/config/settings`, {
@@ -246,13 +313,24 @@ class SyncEngine {
       }
 
       // 3. Pull remote changes from cloud
+      this.setProgress({ current: 2, total: 3, stage: 'Pulling cloud vault' })
       await this.pullRemoteData(user.uid)
 
       this.lastLatencyMs = Date.now() - startSyncMs
       this.lastSyncedAt = Date.now()
+      if (this.lastLatencyMs < 400) {
+        this.networkQuality = 'optimal'
+      } else if (this.lastLatencyMs < 1500) {
+        this.networkQuality = 'moderate'
+      } else {
+        this.networkQuality = 'constrained'
+      }
+      adaptiveGovernor.setNetworkQuality(this.networkQuality)
+      this.setProgress(null)
       this.setStatus('success')
     } catch (err: any) {
       console.error('[SyncEngine] Sync failed:', err)
+      this.setProgress(null)
       this.setStatus('error', err?.message || 'Sync failed')
     } finally {
       this.isSyncing = false
@@ -612,17 +690,23 @@ class SyncEngine {
         const remoteIds = new Set<string>()
 
         const syncStartTime = Date.now()
-        for (const docObj of documents) {
-          if (!docObj?.fields) continue
+        this.setProgress({ current: 0, total: documents.length, stage: 'Ingesting items' })
+
+        const CONCURRENCY_LIMIT = 4
+        let processedCount = 0
+
+        const processDocument = async (docObj: any) => {
+          if (!docObj?.fields) return
           const data = fromFsDoc(docObj.fields)
-          if (!data || !data.id) continue
+          if (!data || !data.id) return
           remoteIds.add(data.id)
 
           // Kernel delta cursor optimization: if item was updated prior to lastSyncCursor and is already present locally,
           // skip full payload parsing and blob hydration to minimize CPU and power draw
           const itemUpdatedAt = data.updatedAt || data.capturedAt || 0
           if (this.lastSyncCursor > 0 && itemUpdatedAt < this.lastSyncCursor - 3000 && store.hasItem(data.id)) {
-            continue
+            processedCount++
+            return
           }
 
           if (data.deletedAt) {
@@ -704,7 +788,18 @@ class SyncEngine {
               localModified = true
             }
           }
+
+          processedCount++
+          if (processedCount % 5 === 0 || processedCount === documents.length) {
+            this.setProgress({
+              current: processedCount,
+              total: documents.length,
+              stage: 'Hydrating payloads'
+            })
+          }
         }
+
+        await runWithConcurrency(documents, CONCURRENCY_LIMIT, processDocument)
 
         // Backfill pre-existing local items not yet in remote cloud vault
         const localItems = store.list()
