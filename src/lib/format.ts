@@ -96,3 +96,28 @@ const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico|tiff?|jfif|pjpeg|pjp)$/i
 export function isImagePath(p: string): boolean {
   return IMG_EXT.test(p)
 }
+
+export interface TextMetrics {
+  words: number
+  chars: number
+  readingTime: string
+  isNotable: boolean
+}
+
+/**
+ * Computes word count, character count, and estimated reading time for text snippets.
+ * Flags isNotable when the text is substantive enough (>= 80 chars & >= 15 words)
+ * to warrant presenting reading time telemetry on the card.
+ */
+export function calculateTextMetrics(text: string): TextMetrics {
+  if (!text) {
+    return { words: 0, chars: 0, readingTime: '< 1 min', isNotable: false }
+  }
+  const chars = text.length
+  const words = text.trim().split(/\s+/).filter(Boolean).length
+  const minutes = Math.ceil(words / 200)
+  const readingTime = words <= 200 ? '< 1 min' : `${minutes} min`
+  const isNotable = chars >= 80 && words >= 15
+  return { words, chars, readingTime, isNotable }
+}
+

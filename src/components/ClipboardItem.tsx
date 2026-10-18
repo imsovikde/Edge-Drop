@@ -22,10 +22,12 @@ import type { DragRequest } from '../../shared/types'
 import { useStore } from '../store/appStore'
 import { useDragOut } from '../hooks/useDragOut'
 import { itemRenderKey } from '../lib/itemSignature'
-import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName } from '../lib/format'
+import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName, calculateTextMetrics } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon } from './icons'
+import { QuickMobileModal } from './QuickMobileModal'
+
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { CodeBlock } from './CodeBlock'
 import { detectCode } from '../lib/codeDetect'
@@ -227,10 +229,18 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const adaptiveSpring = useAdaptiveSpring()
   const [copied, setCopied] = useState(false)
   const [revealed, setRevealed] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
 
   const settings = useStore((s) => s.settings)
   const isHorizontal = settings.stickPosition === 'top'
   const colorInfo = item.data.kind === 'text' ? parseColor(item.data.text) : null
+
+  const textMetrics = useMemo(() => {
+    if (item.data.kind === 'text') {
+      return calculateTextMetrics(item.data.text)
+    }
+    return null
+  }, [item.data])
 
   const sensitiveInfo = useMemo(() => {
     if (item.data.kind === 'text') {
@@ -239,6 +249,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
     return { isSensitive: false, tokenType: null, matchedToken: null, maskedText: '' }
   }, [item.data])
   const isMasked = (settings.maskSensitiveTokens ?? true) && sensitiveInfo.isSensitive && !revealed
+
 
   // Accordion expansion: ONE stack open at a time, coordinated store-wide
   // (expanding another stack collapses this one; Escape / outside click /
@@ -621,7 +632,29 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
                       Macro
                     </span>
                   )}
+                  {textMetrics?.isNotable && (
+                    <span
+                      className="meta-reading-badge"
+                      title={`${textMetrics.chars} characters • ${textMetrics.words} words`}
+                      style={{
+                        fontSize: 9,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#a1a1aa',
+                        fontWeight: 500,
+                        letterSpacing: '0.02em',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}
+                    >
+                      <span>{textMetrics.words}w • {textMetrics.readingTime}</span>
+                    </span>
+                  )}
                   {sensitiveInfo.isSensitive && (
+
                     <span
                       className="meta-secret-badge"
                       title={`Sensitive Token Shield: ${sensitiveInfo.tokenType}. ${isMasked ? 'Masked for privacy (click to reveal)' : 'Revealed (click to mask)'}`}
@@ -735,6 +768,21 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
               <ExternalLinkIcon />
             </button>
           )}
+          {item.data.kind === 'text' && (
+            <button
+              className="act"
+              title={item.data.isUrl ? 'Mobile QR link transfer' : 'Scan text to phone'}
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                e.currentTarget.blur()
+                playButtonClickSound()
+                setShowQrModal(true)
+              }}
+            >
+              <QrCodeIcon width={12} height={12} />
+            </button>
+          )}
           <div className="act-divider" />
           <button
             className="act danger"
@@ -751,6 +799,13 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           </button>
         </div>
       </div>
+      {showQrModal && item.data.kind === 'text' && (
+        <QuickMobileModal
+          text={item.data.text}
+          isUrl={Boolean(item.data.isUrl)}
+          onClose={() => setShowQrModal(false)}
+        />
+      )}
     </motion.div>
   )
 })

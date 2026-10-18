@@ -171,3 +171,20 @@ export const EyeSlashIcon = (p: P) => {
   )
 }
 
+export const QrCodeIcon = (p: P) => {
+  const { size, width, height, ...rest } = p
+  const s = size ?? width ?? 14
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={height ?? s} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...(rest as any)}>
+      <rect x="3" y="3" width="7" height="7" rx="1.2" />
+      <rect x="14" y="3" width="7" height="7" rx="1.2" />
+      <rect x="3" y="14" width="7" height="7" rx="1.2" />
+      <circle cx="6.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="6.5" cy="17.5" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M14 14h2v2h-2zM18.5 14h2.5v2.5h-2.5zM14 18.5h2.5v2.5h-2.5zM18.5 18.5h2.5v2.5h-2.5z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+
