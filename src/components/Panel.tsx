@@ -301,8 +301,10 @@ export function Panel() {
     containerStyle.right = 0
   } else if (isTop) {
     containerStyle.top = 0
-    containerStyle.left = '50%'
-    containerStyle.transform = 'translate(-50%, 0)'
+    containerStyle.left = 30
+    containerStyle.right = 30
+    containerStyle.width = 'calc(100% - 60px)'
+    containerStyle.transform = 'none'
   } else {
     containerStyle.top = topOffset
     containerStyle.transform = 'translateY(-50%)'

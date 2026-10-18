@@ -44,13 +44,14 @@
 /* Top-position blade: centered at top, bottom-rounded corners */
 .blade-container.blade-top {
   top: 0;
-  left: 50%;
-  right: auto;
+  left: 30px;
+  right: 30px;
+  width: calc(100% - 60px);
   bottom: auto;
+  transform: none;
 }
 .blade-container.blade-top .blade {
-  margin: 0 auto;
-  width: min(calc(100vw - 60px), 1080px);
+  width: 100%;
   border-radius: 0 0 24px 24px;
 }
 
@@ -418,7 +419,7 @@
   height: 146px;
 }
 
-/* Horizontal Pinned Accordion Drawer — Smooth width transition */
+/* Horizontal Pinned Accordion Drawer - Smooth width transition */
 .pinned-accordion.horizontal {
   display: block;
   width: 0;
