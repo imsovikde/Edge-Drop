@@ -33,6 +33,8 @@ export interface TranslationKeys {
     launchAtLoginDesc: string
     incognitoTitle: string
     incognitoDesc: string
+    tokenShieldTitle?: string
+    tokenShieldDesc?: string
     hoverActivationTitle: string
     hoverActivationDescOn: string
     hoverActivationDescOff: string
@@ -583,6 +585,8 @@ export const en: TranslationKeys = {
     "launchAtLoginDesc": "Start silently in background when computer boots",
     "incognitoTitle": "Incognito mode",
     "incognitoDesc": "Temporarily pause recording new clipboard items",
+    "tokenShieldTitle": "Sensitive Token Shield",
+    "tokenShieldDesc": "Automatically detect and redact API keys, tokens, and private secrets in clipboard cards",
     "hoverActivationTitle": "Hover Activation",
     "hoverActivationDescOn": "Slide open shelf when hovering cursor near screen edge",
     "hoverActivationDescOff": "Hover trigger paused. Use {shortcut} to open",

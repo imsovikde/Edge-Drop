@@ -53,8 +53,17 @@ function CategoryBar({ className = '' }: EmojiCategoryBarProps) {
 
   useEffect(() => {
     const handleStorage = () => setRecents(loadRecents())
+    const handleCustom = (e: Event) => {
+      const custom = e as CustomEvent<string[]>
+      if (Array.isArray(custom.detail)) setRecents(custom.detail)
+      else setRecents(loadRecents())
+    }
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    window.addEventListener('edge-drop:emoji-recents-updated', handleCustom)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('edge-drop:emoji-recents-updated', handleCustom)
+    }
   }, [])
 
   const shownCats = useMemo(() => {

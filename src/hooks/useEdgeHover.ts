@@ -367,7 +367,7 @@ export function useEdgeHover(): void {
       if (s.stickPosition === 'top') {
         const dispW = displaySize.current.width
         const { dockWidth, dockX } = getHorizontalDockMetrics(dispW, s.horizontalOffset ?? 0.5, s.hotZoneHeight ?? 0.25, s.triggerAlignment || 'center')
-        const bladeHeight = 218
+        const bladeHeight = state.settingsOpen ? 480 : (state.emojiOpen ? 260 : 218)
         const inBlade = y >= -BUFFER_PX && y <= bladeHeight && x >= dockX - BUFFER_PX && x <= dockX + dockWidth + BUFFER_PX
         if (inBlade) return true
         if (hasFlyout && state.previewFlyoutRect && state.previewFlyoutRect.left !== undefined && state.previewFlyoutRect.right !== undefined) {
@@ -490,7 +490,7 @@ export function useEdgeHover(): void {
             edge.setInteractive(true)
           }
 
-          const baseBladeH = 218
+          const baseBladeH = state.settingsOpen ? 480 : (state.emojiOpen ? 260 : 218)
           const keepOpenDepth = baseBladeH
           const startCloseDepth = baseBladeH + 40
           const insideX = data.x >= dockX - BUFFER_PX && data.x <= dockX + dockWidth + BUFFER_PX

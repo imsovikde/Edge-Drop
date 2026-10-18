@@ -18,6 +18,11 @@ function storage(): MinimalStorage | null {
 }
 
 export function loadRecents(): string[] {
+  try {
+    const fromWindow = (globalThis as any).__edgeDropEmojiRecents
+    if (Array.isArray(fromWindow) && fromWindow.length > 0) return fromWindow
+  } catch { /* ignore */ }
+
   const raw = storage()?.getItem(RECENTS_KEY)
   if (!raw) return []
   try {
@@ -30,11 +35,20 @@ export function loadRecents(): string[] {
 }
 
 export function saveRecents(unifieds: readonly string[]): void {
+  const arr = [...unifieds]
   try {
-    storage()?.setItem(RECENTS_KEY, JSON.stringify(unifieds))
+    (globalThis as any).__edgeDropEmojiRecents = arr
+    storage()?.setItem(RECENTS_KEY, JSON.stringify(arr))
   } catch {
     /* quota / private mode */
   }
+
+  try {
+    const g = globalThis as any
+    if (typeof g.window !== 'undefined' && typeof g.CustomEvent !== 'undefined') {
+      g.window.dispatchEvent(new g.CustomEvent('edge-drop:emoji-recents-updated', { detail: arr }))
+    }
+  } catch { /* ignore */ }
 }
 
 export function loadSkinToneId(): number {

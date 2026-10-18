@@ -116,7 +116,7 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
           gridTemplate: '1fr / 1fr',
           alignItems: 'center',
           minWidth: 0,
-          flex: 1,
+          flex: isHorizontal ? '0 0 auto' : 1,
           height: 32,
           overflow: 'visible'
         }}

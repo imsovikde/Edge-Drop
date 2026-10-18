@@ -14,7 +14,7 @@
  * clamped preview; file items list names or bundle badge. Motion is handled by
  * the parent list (layout/AnimatePresence), so this component stays presentational.
  */
-import { memo, useState, useCallback, useEffect, useLayoutEffect, useRef, forwardRef, type ReactNode } from 'react'
+import { memo, useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import type { ClipboardItemDto, ColorTag } from '../../shared/types'
 import { MAX_STACK } from '../../shared/types'
@@ -25,7 +25,7 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon } from './icons'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { CodeBlock } from './CodeBlock'
 import { detectCode } from '../lib/codeDetect'
@@ -36,6 +36,7 @@ import { useTranslation, t } from '../i18n'
 import { useRelativeTimeTick } from '../hooks/useRelativeTimeTick'
 import { useAdaptiveSpring } from '../hooks/useAdaptiveSpring'
 import { hasMacroTokens } from '../lib/macroEngine'
+import { detectSensitiveToken } from '../lib/securityDetector'
 
 export const RelativeTime = memo(function RelativeTime({ capturedAt }: { capturedAt: number }) {
   useRelativeTimeTick()
@@ -225,10 +226,19 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const startDrag = useDragOut()
   const adaptiveSpring = useAdaptiveSpring()
   const [copied, setCopied] = useState(false)
+  const [revealed, setRevealed] = useState(false)
 
   const settings = useStore((s) => s.settings)
   const isHorizontal = settings.stickPosition === 'top'
   const colorInfo = item.data.kind === 'text' ? parseColor(item.data.text) : null
+
+  const sensitiveInfo = useMemo(() => {
+    if (item.data.kind === 'text') {
+      return detectSensitiveToken(item.data.text)
+    }
+    return { isSensitive: false, tokenType: null, matchedToken: null, maskedText: '' }
+  }, [item.data])
+  const isMasked = (settings.maskSensitiveTokens ?? true) && sensitiveInfo.isSensitive && !revealed
 
   // Accordion expansion: ONE stack open at a time, coordinated store-wide
   // (expanding another stack collapses this one; Escape / outside click /
@@ -558,7 +568,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
                     onCollapse={onCollapse}
                   />
               ) : (
-                <Preview item={item} />
+                <Preview item={item} isMasked={isMasked} sensitiveInfo={sensitiveInfo} />
               )}
             </div>
             {(!isBundle || !expanded) && (
@@ -611,6 +621,34 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
                       Macro
                     </span>
                   )}
+                  {sensitiveInfo.isSensitive && (
+                    <span
+                      className="meta-secret-badge"
+                      title={`Sensitive Token Shield: ${sensitiveInfo.tokenType}. ${isMasked ? 'Masked for privacy (click to reveal)' : 'Revealed (click to mask)'}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRevealed(!revealed)
+                      }}
+                      style={{
+                        fontSize: 9,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        background: isMasked ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        border: isMasked ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(16, 185, 129, 0.35)',
+                        color: isMasked ? '#f87171' : '#34d399',
+                        fontWeight: 600,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <ShieldIcon width={10} height={10} />
+                      <span>{isMasked ? (sensitiveInfo.tokenType || 'SECRET') : 'REVEALED'}</span>
+                    </span>
+                  )}
                 </div>
                 <RelativeTime capturedAt={item.capturedAt} />
               </div>
@@ -623,6 +661,21 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           onClick={(e) => { e.stopPropagation(); e.preventDefault(); }} 
           style={{ display: isBundle && expanded ? 'none' : undefined }}
         >
+          {sensitiveInfo.isSensitive && (
+            <button
+              className={`act${revealed ? ' active' : ''}`}
+              title={revealed ? 'Mask secret token' : 'Reveal secret token'}
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                e.currentTarget.blur()
+                playButtonClickSound()
+                setRevealed(!revealed)
+              }}
+            >
+              {revealed ? <EyeSlashIcon width={12} height={12} /> : <EyeIcon width={12} height={12} />}
+            </button>
+          )}
           <TagActionMenu
             itemId={item.id}
             currentColorTag={item.colorTag}
@@ -2292,7 +2345,15 @@ function FileFolderCard({
 /* Preview                                                             */
 /* ------------------------------------------------------------------ */
 
-function Preview({ item }: { item: ClipboardItemDto }) {
+function Preview({
+  item,
+  isMasked,
+  sensitiveInfo
+}: {
+  item: ClipboardItemDto
+  isMasked?: boolean
+  sensitiveInfo?: { isSensitive: boolean; tokenType: string | null; matchedToken: string | null; maskedText: string }
+}) {
   const query = useStore((s) => s.query)
   const deepSearchResults = useStore((s) => s.deepSearchResults)
   const deepMatch = deepSearchResults[item.id]
@@ -2331,12 +2392,13 @@ function Preview({ item }: { item: ClipboardItemDto }) {
           </div>
         )
       }
-      const codeInfo = detectCode(item.data.text)
+      const rawText = isMasked && sensitiveInfo?.isSensitive ? sensitiveInfo.maskedText : item.data.text
+      const codeInfo = detectCode(rawText)
       if (codeInfo.isCode) {
         return (
           <div className="code-card-preview">
             <CodeBlock
-              code={item.data.text}
+              code={rawText}
               language={codeInfo.language}
               showFrame={false}
               showHeader={false}
@@ -2350,7 +2412,7 @@ function Preview({ item }: { item: ClipboardItemDto }) {
       }
       return (
         <div className="preview">
-          {renderHighlighted(previewText(item.data.text))}
+          {renderHighlighted(previewText(rawText))}
           {deepMatch?.matchedField === 'payload' && deepMatch.matchSnippet && (
             <div className="deep-payload-snippet" title="Found in disk payload">
               <span>⚡ {renderHighlighted(deepMatch.matchSnippet)}</span>
@@ -2554,6 +2616,9 @@ export const ClipboardItemCard = memo(
     const prev = prevProps.item
     const next = nextProps.item
     return (
+      prevProps.isSelected === nextProps.isSelected &&
+      prevProps.altHeld === nextProps.altHeld &&
+      prevProps.index === nextProps.index &&
       prev.id === next.id &&
       prev.pinned === next.pinned &&
       prev.hitCount === next.hitCount &&

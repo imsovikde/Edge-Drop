@@ -18,7 +18,7 @@
 import type { SVGProps } from 'react'
 import { PHOSPHOR_BOLD, PHOSPHOR_FILL, type PhosphorName } from './phosphorPaths'
 
-type P = SVGProps<SVGSVGElement> & { weight?: 'bold' | 'fill' }
+type P = SVGProps<SVGSVGElement> & { weight?: 'bold' | 'fill'; size?: number }
 
 /** Line thickness in px the icon should read at (matches the old Lucide set). */
 const linePx = (size: number) => (size <= 14 ? 1.55 : 1.7)
@@ -138,3 +138,36 @@ export { CustomFileIcon, CustomFileIcon as FileKindIcon, FileStackPhoto }
 
 export const FileIcon = (p: P) => <CustomFileIcon width={p.width ?? 16} height={p.height ?? 16} {...(p as any)} />
 export const FileIconGlyph = FileIcon
+
+export const ShieldIcon = (p: P) => {
+  const { size, width, height, ...rest } = p
+  const s = size ?? width ?? 14
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={height ?? s} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...(rest as any)}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  )
+}
+
+export const EyeIcon = (p: P) => {
+  const { size, width, height, ...rest } = p
+  const s = size ?? width ?? 14
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={height ?? s} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...(rest as any)}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+export const EyeSlashIcon = (p: P) => {
+  const { size, width, height, ...rest } = p
+  const s = size ?? width ?? 14
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={height ?? s} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...(rest as any)}>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  )
+}
+

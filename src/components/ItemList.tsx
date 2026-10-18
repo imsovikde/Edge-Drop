@@ -357,7 +357,7 @@ export function ItemList() {
     stopScrolling()
   }
 
-  const filterKey = `${typeFilter}:${query}`
+  const filterKey = `${settings.stickPosition}:${typeFilter}:${query}`
 
   return (
     <div

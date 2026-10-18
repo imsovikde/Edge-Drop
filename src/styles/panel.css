@@ -346,13 +346,15 @@
    width so focusing never shifts any neighboring buttons. Same field, just
    the 30px control height and 12px text of that dock. */
 .header-search-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  position: static;
+  transform: none;
+  flex: 1 1 auto;
+  max-width: 520px;
+  margin: 0 12px;
   z-index: 5;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 .header-search-center .search {
   --search-h: 30px;

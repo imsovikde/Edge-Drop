@@ -248,6 +248,10 @@ export interface Settings {
   customFirebaseConfig?: string
   /** Whether automatic cloud sync to Firebase is enabled. Default: true. */
   cloudSyncEnabled?: boolean
+  /** When true, automatically masks sensitive API keys, tokens, and private keys in card previews. Default: true. */
+  maskSensitiveTokens?: boolean
+  /** Persistent emoji recents list synchronized across sessions and Cloud Vault. Default: []. */
+  emojiRecents?: string[]
 }
 
 export interface FirebaseUserDto {
@@ -369,7 +373,9 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'system',
   toggleHotkey: 'Alt+C',
   customFirebaseConfig: undefined,
-  cloudSyncEnabled: true
+  cloudSyncEnabled: true,
+  maskSensitiveTokens: true,
+  emojiRecents: []
 }
 
 

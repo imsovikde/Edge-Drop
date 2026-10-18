@@ -15,7 +15,7 @@ import {
   CopyIndicatorIcon,
   SparkleIndicatorIcon
 } from './CopyIndicatorCurve'
-import { ChevronRightIcon, CloseIcon, LogOutIcon, StarIcon, InfoIcon, GithubOctocatLogo, MicrosoftStoreLogo } from './icons'
+import { ChevronRightIcon, CloseIcon, LogOutIcon, StarIcon, InfoIcon, GithubOctocatLogo, MicrosoftStoreLogo, ShieldIcon } from './icons'
 import { HotkeyRecorder } from './HotkeyRecorder'
 import { SlideCommit } from './SlideCommit'
 import { WakeSlider } from './WakeSlider'
@@ -485,7 +485,7 @@ export function Settings({
             </button>
           </div>
           <div className="app-version-footer">
-            <span>{t('footer.version')} {currentVersion || '1.9.0'}</span>
+            <span>{t('footer.version')} {currentVersion || '2.0.0'}</span>
             <span className="version-separator">·</span>
             <button
               type="button"
@@ -855,7 +855,7 @@ export function Settings({
                   <span>{t('behaviour.isUpToDate')}</span>
                 </div>
                 <div className="manual-update-desc">
-                  {t('footer.version')} {currentVersion || '1.9.0'}
+                  {t('footer.version')} {currentVersion || '2.0.0'}
                 </div>
               </div>
               <button
@@ -895,7 +895,7 @@ export function Settings({
               <div className="manual-update-info">
                 <div className="manual-update-title">{t('behaviour.checkForUpdates')}</div>
                 <div className="manual-update-desc">
-                  {t('footer.version')} {currentVersion || '1.9.0'}
+                  {t('footer.version')} {currentVersion || '2.0.0'}
                 </div>
               </div>
               <button
@@ -1007,7 +1007,7 @@ export function Settings({
       <div className="settings-shelf-card about-card" style={{ width: 280 }}>
         <div className="shelf-card-top">
           <div className="setting-group-label">{t('groups.aboutEdgeDrop') || 'ABOUT EDGE-DROP'}</div>
-          <div className="setting-title">Edge-Drop v{currentVersion || '1.9.0'}</div>
+          <div className="setting-title">Edge-Drop v{currentVersion || '2.0.0'}</div>
           <div className="setting-desc">{t('footer.feedbackDesc')}</div>
         </div>
         <div className="shelf-card-bottom">
@@ -1155,6 +1155,28 @@ export function Settings({
                     <Toggle
                       checked={settings.incognito}
                       onChange={(v) => patch({ incognito: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3b: Sensitive Token Shield */}
+              <div className="settings-shelf-card shield-card behaviour-col">
+                <div className="shelf-card-top">
+                  <div className="setting-group-label">{t('groups.security') || 'SECURITY'}</div>
+                </div>
+                <div className="shelf-card-inline">
+                  <div className="shelf-card-inline-text">
+                    <div className="setting-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <ShieldIcon size={14} className="text-emerald-400" />
+                      <span>{t('behaviour.tokenShieldTitle') || 'Sensitive Token Shield'}</span>
+                    </div>
+                    <div className="setting-desc">{t('behaviour.tokenShieldDesc') || 'Automatically detect and redact API keys, tokens, and private secrets in clipboard cards'}</div>
+                  </div>
+                  <div className="shelf-card-inline-action">
+                    <Toggle
+                      checked={settings.maskSensitiveTokens ?? true}
+                      onChange={(v) => patch({ maskSensitiveTokens: v })}
                     />
                   </div>
                 </div>
@@ -1415,7 +1437,7 @@ export function Settings({
                     <div className="setting-desc">
                       {checkState.status === 'error'
                         ? (checkState.error || t('behaviour.updateCheckFailed'))
-                        : `Edge-Drop v${currentVersion || '1.9.0'}`}
+                        : `Edge-Drop v${currentVersion || '2.0.0'}`}
                     </div>
                   </div>
                   <div className="shelf-card-bottom">
@@ -1889,6 +1911,28 @@ export function Settings({
                         <Toggle
                           checked={settings.incognito}
                           onChange={(v) => patch({ incognito: v })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3b: Sensitive Token Shield */}
+                  <div className="setting-card">
+                    <div className="shelf-card-top">
+                      <div className="setting-group-label">{t('groups.security') || 'SECURITY'}</div>
+                    </div>
+                    <div className="shelf-card-inline">
+                      <div className="shelf-card-inline-text">
+                        <div className="setting-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <ShieldIcon size={14} className="text-emerald-400" />
+                          <span>{t('behaviour.tokenShieldTitle') || 'Sensitive Token Shield'}</span>
+                        </div>
+                        <div className="setting-desc">{t('behaviour.tokenShieldDesc') || 'Automatically detect and redact API keys, tokens, and private secrets in clipboard cards'}</div>
+                      </div>
+                      <div className="shelf-card-inline-action">
+                        <Toggle
+                          checked={settings.maskSensitiveTokens ?? true}
+                          onChange={(v) => patch({ maskSensitiveTokens: v })}
                         />
                       </div>
                     </div>
