@@ -49,4 +49,27 @@ describe('AuthManager User DTO & Session Handling', () => {
       providerId: 'firebase'
     })
   })
+
+  it('preserves emailVerified boolean when present on User', () => {
+    const verifiedUser = {
+      uid: 'verified-1',
+      email: 'verified@example.com',
+      displayName: 'Verified',
+      photoURL: null,
+      isAnonymous: false,
+      providerData: [],
+      emailVerified: true
+    } as unknown as User
+
+    const dto = toUserDto(verifiedUser)
+    expect(dto?.emailVerified).toBe(true)
+
+    const unverifiedUser = {
+      ...verifiedUser,
+      uid: 'unverified-2',
+      emailVerified: false
+    } as unknown as User
+    const unverifiedDto = toUserDto(unverifiedUser)
+    expect(unverifiedDto?.emailVerified).toBe(false)
+  })
 })

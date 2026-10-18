@@ -15,7 +15,6 @@ import { join } from 'node:path'
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInAnonymously as fbSignInAnonymously,
   signOut as fbSignOut,
   onAuthStateChanged as fbOnAuthStateChanged,
@@ -35,9 +34,23 @@ function getAuthEncFile(): string {
   }
 }
 
+function parseJwtPayload(token: string): any {
+  try {
+    const parts = token.split('.')
+    if (parts.length >= 2) {
+      const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const json = Buffer.from(payloadBase64, 'base64').toString('utf8')
+      return JSON.parse(json)
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 export function toUserDto(user: User | null): FirebaseUserDto | null {
   if (!user) return null
-  return {
+  const dto: FirebaseUserDto = {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName,
@@ -45,6 +58,10 @@ export function toUserDto(user: User | null): FirebaseUserDto | null {
     isAnonymous: user.isAnonymous,
     providerId: user.providerData?.[0]?.providerId || 'firebase'
   }
+  if (typeof user.emailVerified === 'boolean') {
+    dto.emailVerified = user.emailVerified
+  }
+  return dto
 }
 
 export function formatAuthError(errCodeOrMsg: string): string {
@@ -69,6 +86,7 @@ interface PersistedAuthSession {
   photoURL: string | null
   isAnonymous: boolean
   providerId: string
+  emailVerified?: boolean
   idToken?: string
   refreshToken?: string
   savedAt: number
@@ -76,6 +94,7 @@ interface PersistedAuthSession {
 
 class AuthManager {
   private currentUser: FirebaseUserDto | null = null
+  private cachedSession: PersistedAuthSession | null = null
   private listeners: Set<(user: FirebaseUserDto | null) => void> = new Set()
   private initialized = false
 
@@ -91,7 +110,7 @@ class AuthManager {
       fbOnAuthStateChanged(auth, (user) => {
         if (user) {
           this.currentUser = toUserDto(user)
-          this.persistSession(user)
+          void this.persistSession(user)
           this.notifyListeners()
         }
       })
@@ -118,8 +137,15 @@ class AuthManager {
     }
   }
 
-  private persistSession(user: User): void {
+  private async persistSession(user: User): Promise<void> {
     try {
+      let idToken: string | undefined
+      try {
+        idToken = await user.getIdToken()
+      } catch {
+        /* ignore */
+      }
+      const refreshToken = (user as any).refreshToken || undefined
       this.persistAuthTokens({
         uid: user.uid,
         email: user.email,
@@ -127,6 +153,9 @@ class AuthManager {
         photoURL: user.photoURL,
         isAnonymous: user.isAnonymous,
         providerId: user.providerData?.[0]?.providerId || 'firebase',
+        emailVerified: user.emailVerified,
+        idToken,
+        refreshToken,
         savedAt: Date.now()
       })
     } catch (err) {
@@ -136,6 +165,7 @@ class AuthManager {
 
   private persistAuthTokens(session: PersistedAuthSession): void {
     try {
+      this.cachedSession = session
       const file = getAuthEncFile()
       const data = JSON.stringify(session)
       if (safeStorage.isEncryptionAvailable()) {
@@ -177,6 +207,112 @@ class AuthManager {
     return null
   }
 
+  public async getFreshIdToken(): Promise<string | null> {
+    // 1. If Firebase SDK has active currentUser, attempt token retrieval
+    const auth = getFirebaseAuth()
+    if (auth?.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken(false)
+        if (token) return token
+      } catch {
+        /* fallback to REST cached session */
+      }
+    }
+
+    // 2. Check cached session or load from disk
+    if (!this.cachedSession) {
+      try {
+        const file = getAuthEncFile()
+        if (existsSync(file)) {
+          const raw = readFileSync(file)
+          const dataStr = safeStorage.isEncryptionAvailable()
+            ? safeStorage.decryptString(raw)
+            : raw.toString('utf8')
+          this.cachedSession = JSON.parse(dataStr) as PersistedAuthSession
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (!this.cachedSession) return null
+
+    // 3. Inspect existing idToken expiry
+    if (this.cachedSession.idToken) {
+      const jwt = parseJwtPayload(this.cachedSession.idToken)
+      const nowSec = Math.floor(Date.now() / 1000)
+      if (jwt?.exp && jwt.exp > nowSec + 60) {
+        return this.cachedSession.idToken
+      }
+    }
+
+    // 4. Refresh token via Google Token Service if refreshToken is present
+    if (this.cachedSession.refreshToken) {
+      const refreshed = await this.refreshAuthToken(this.cachedSession.refreshToken)
+      if (refreshed) {
+        const jwt = parseJwtPayload(refreshed.idToken)
+        const emailVerified = jwt && typeof jwt.email_verified === 'boolean'
+          ? jwt.email_verified
+          : this.cachedSession.emailVerified
+        this.cachedSession = {
+          ...this.cachedSession,
+          idToken: refreshed.idToken,
+          refreshToken: refreshed.refreshToken,
+          emailVerified,
+          savedAt: Date.now()
+        }
+        this.persistAuthTokens(this.cachedSession)
+        if (this.currentUser && this.currentUser.uid === this.cachedSession.uid) {
+          this.currentUser.emailVerified = emailVerified
+          this.notifyListeners()
+        }
+        return refreshed.idToken
+      }
+    }
+
+    return this.cachedSession.idToken || null
+  }
+
+  public async sendVerificationEmail(targetToken?: string): Promise<{ ok: boolean; message: string }> {
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) {
+      return { ok: false, message: 'Firebase configuration is missing or invalid.' }
+    }
+
+    const token = targetToken || (await this.getFreshIdToken())
+    if (!token) {
+      return { ok: false, message: 'No active authenticated session found. Please sign in.' }
+    }
+
+    try {
+      const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(config.apiKey)}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: 'VERIFY_EMAIL',
+          idToken: token
+        })
+      })
+
+      const data = (await res.json()) as any
+      if (!res.ok) {
+        const errMsg = data?.error?.message || `Failed with status ${res.status}`
+        if (errMsg.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+          return { ok: false, message: 'Too many requests. Please wait a few minutes before trying again.' }
+        }
+        return { ok: false, message: formatAuthError(errMsg) }
+      }
+
+      return {
+        ok: true,
+        message: 'Verification email sent successfully! Please check your inbox and spam folder.'
+      }
+    } catch (err: any) {
+      return { ok: false, message: err?.message || 'Network error while sending verification email.' }
+    }
+  }
+
   private restoreSession(): void {
     try {
       const file = getAuthEncFile()
@@ -194,15 +330,25 @@ class AuthManager {
       }
       const parsed = JSON.parse(dataStr) as PersistedAuthSession
       if (parsed && parsed.uid) {
+        this.cachedSession = parsed
+        let emailVerified = !!parsed.emailVerified
+        if (parsed.idToken) {
+          const jwt = parseJwtPayload(parsed.idToken)
+          if (jwt && typeof jwt.email_verified === 'boolean') {
+            emailVerified = jwt.email_verified
+          }
+        }
+
         this.currentUser = {
           uid: parsed.uid,
           email: parsed.email || null,
           displayName: parsed.displayName || null,
           photoURL: parsed.photoURL || null,
           isAnonymous: !!parsed.isAnonymous,
-          providerId: parsed.providerId || 'firebase'
+          providerId: parsed.providerId || 'firebase',
+          emailVerified
         }
-        console.log(`[AuthManager] Restored previous session for user ${parsed.email || parsed.uid}`)
+        console.log(`[AuthManager] Restored previous session for user ${parsed.email || parsed.uid} (verified=${emailVerified})`)
         this.notifyListeners()
 
         // Background refresh token
@@ -210,12 +356,20 @@ class AuthManager {
           this.refreshAuthToken(parsed.refreshToken)
             .then((refreshed) => {
               if (refreshed) {
-                this.persistAuthTokens({
+                const jwt = parseJwtPayload(refreshed.idToken)
+                const refreshedVerified = jwt && typeof jwt.email_verified === 'boolean' ? jwt.email_verified : emailVerified
+                const updatedSession: PersistedAuthSession = {
                   ...parsed,
                   idToken: refreshed.idToken,
                   refreshToken: refreshed.refreshToken,
+                  emailVerified: refreshedVerified,
                   savedAt: Date.now()
-                })
+                }
+                this.persistAuthTokens(updatedSession)
+                if (this.currentUser && this.currentUser.uid === parsed.uid) {
+                  this.currentUser.emailVerified = refreshedVerified
+                  this.notifyListeners()
+                }
               }
             })
             .catch(() => {})
@@ -258,13 +412,17 @@ class AuthManager {
       throw new Error(formatAuthError(errMsg))
     }
 
+    const jwt = data.idToken ? parseJwtPayload(data.idToken) : null
+    const emailVerified = jwt && typeof jwt.email_verified === 'boolean' ? jwt.email_verified : false
+
     const userDto: FirebaseUserDto = {
       uid: data.localId,
       email: data.email || cleanEmail,
       displayName: data.displayName || null,
       photoURL: null,
       isAnonymous: false,
-      providerId: 'password'
+      providerId: 'password',
+      emailVerified
     }
 
     // 2. Also authenticate Firebase JS SDK if available so Firestore rules accept requests
@@ -285,6 +443,7 @@ class AuthManager {
       photoURL: userDto.photoURL,
       isAnonymous: false,
       providerId: 'password',
+      emailVerified,
       idToken: data.idToken,
       refreshToken: data.refreshToken,
       savedAt: Date.now()
@@ -326,16 +485,24 @@ class AuthManager {
       displayName: null,
       photoURL: null,
       isAnonymous: false,
-      providerId: 'password'
+      providerId: 'password',
+      emailVerified: false
     }
 
-    // 2. Also register in Firebase JS SDK if available
+    // Automatically send verification email in background
+    if (data.idToken) {
+      this.sendVerificationEmail(data.idToken).catch((err) => {
+        console.warn('[AuthManager] Automatic verification email warning:', err)
+      })
+    }
+
+    // 2. Also authenticate Firebase JS SDK if available (use signInWithEmailAndPassword since user is already created via REST)
     const auth = getFirebaseAuth()
     if (auth) {
       try {
-        await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass)
+        await signInWithEmailAndPassword(auth, cleanEmail, cleanPass)
       } catch (err) {
-        console.warn('[AuthManager] Firebase SDK registration sync warning:', err)
+        console.warn('[AuthManager] Firebase SDK sign-in sync warning:', err)
       }
     }
 
@@ -347,6 +514,7 @@ class AuthManager {
       photoURL: userDto.photoURL,
       isAnonymous: false,
       providerId: 'password',
+      emailVerified: false,
       idToken: data.idToken,
       refreshToken: data.refreshToken,
       savedAt: Date.now()
@@ -604,6 +772,7 @@ class AuthManager {
       }
     }
     this.currentUser = null
+    this.cachedSession = null
     try {
       const file = getAuthEncFile()
       if (existsSync(file)) rmSync(file)

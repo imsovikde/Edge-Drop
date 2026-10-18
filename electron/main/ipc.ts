@@ -234,6 +234,10 @@ export function registerIpc(): void {
     await authManager.signOut()
   })
 
+  handle('auth:send-verification-email', async () => {
+    return authManager.sendVerificationEmail()
+  })
+
   handle('auth:set-custom-config', async (configJson) => {
     try {
       const encrypted = encryptCustomConfig(configJson)
