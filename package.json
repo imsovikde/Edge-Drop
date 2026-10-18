@@ -1,6 +1,6 @@
 {
   "name": "edge-drop",
-  "version": "10.0.1",
+  "version": "1.7.0",
   "description": "Edge-Drop: a zero-click, hover-activated clipboard shelf and desktop file-transfer hub with native OS integration.",
   "author": "Souvik Dey <imsovikde@gmail.com>",
   "repository": {
