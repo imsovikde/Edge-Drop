@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { resolveStoredImage, thumbnailUrlForFile, thumbnailUrlForStoredImage } from '../electron/main/imageProtocol'
+import { emojiAssetDir, resolveStoredImage, thumbnailUrlForFile, thumbnailUrlForStoredImage } from '../electron/main/imageProtocol'
 
 describe('resolveStoredImage', () => {
   let imagesDir: string
@@ -53,5 +53,16 @@ describe('resolveStoredImage', () => {
   it('encodes file thumbnail paths without exposing a raw Windows path', () => {
     expect(thumbnailUrlForFile('C:\\Pictures\\image one.png'))
       .toBe('edgelocal://thumb/file/C%3A%2FPictures%2Fimage%20one.png')
+  })
+
+  it('resolves packaged emoji asset directory from resourcesPath extraResources', () => {
+    const fakeResourcesPath = join(imagesDir, 'resources')
+    const resolved = emojiAssetDir({
+      packaged: true,
+      resourcesPath: fakeResourcesPath,
+      appPath: join(imagesDir, 'app'),
+      cwd: imagesDir
+    })
+    expect(resolved).toBe(join(fakeResourcesPath, 'emoji', '64'))
   })
 })

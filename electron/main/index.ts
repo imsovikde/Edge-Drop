@@ -139,7 +139,7 @@ app.whenReady().then(() => {
     }
     setTimeout(() => {
       createOnboardingWindow()
-    }, 2000)
+    }, 100)
   }
   setHotZoneWidth(settings.hotZoneWidth || 3)
 

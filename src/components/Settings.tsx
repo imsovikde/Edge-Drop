@@ -485,7 +485,7 @@ export function Settings({
             </button>
           </div>
           <div className="app-version-footer">
-            <span>{t('footer.version')} {currentVersion || '0.3.1'}</span>
+            <span>{t('footer.version')} {currentVersion || '10.0.1'}</span>
             <span className="version-separator">·</span>
             <button
               type="button"
@@ -855,7 +855,7 @@ export function Settings({
                   <span>{t('behaviour.isUpToDate')}</span>
                 </div>
                 <div className="manual-update-desc">
-                  {t('footer.version')} {currentVersion || '0.3.1'}
+                  {t('footer.version')} {currentVersion || '10.0.1'}
                 </div>
               </div>
               <button
@@ -895,7 +895,7 @@ export function Settings({
               <div className="manual-update-info">
                 <div className="manual-update-title">{t('behaviour.checkForUpdates')}</div>
                 <div className="manual-update-desc">
-                  {t('footer.version')} {currentVersion || '0.3.1'}
+                  {t('footer.version')} {currentVersion || '10.0.1'}
                 </div>
               </div>
               <button
@@ -1007,7 +1007,7 @@ export function Settings({
       <div className="settings-shelf-card about-card" style={{ width: 280 }}>
         <div className="shelf-card-top">
           <div className="setting-group-label">{t('groups.aboutEdgeDrop') || 'ABOUT EDGE-DROP'}</div>
-          <div className="setting-title">Edge-Drop v{currentVersion || '0.3.2'}</div>
+          <div className="setting-title">Edge-Drop v{currentVersion || '10.0.1'}</div>
           <div className="setting-desc">{t('footer.feedbackDesc')}</div>
         </div>
         <div className="shelf-card-bottom">
@@ -1415,7 +1415,7 @@ export function Settings({
                     <div className="setting-desc">
                       {checkState.status === 'error'
                         ? (checkState.error || t('behaviour.updateCheckFailed'))
-                        : `Edge-Drop v${currentVersion || '0.3.1'}`}
+                        : `Edge-Drop v${currentVersion || '10.0.1'}`}
                     </div>
                   </div>
                   <div className="shelf-card-bottom">

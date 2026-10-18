@@ -287,7 +287,7 @@ export const useStore = create<AppState>((set, get) => ({
   internalDragReq: null,
   toasts: [],
   tutorialStep: 0,
-  currentVersion: '',
+  currentVersion: '10.0.1',
   isStoreBuild: false,
   updateInfo: null,
   previewItemId: null,
