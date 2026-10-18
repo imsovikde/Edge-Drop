@@ -60,6 +60,7 @@ export function Settings({
   const getLangLabel = (l: { code: string; name: string; nativeName: string }) =>
     l.code === 'system' || l.nativeName.includes('(') ? l.nativeName : `${l.nativeName} (${l.name})`
   const selectedLang = languages.find((l) => l.code === (language || 'system')) || languages[0]
+  const [verticalLangDropdownOpen, setVerticalLangDropdownOpen] = useState(false)
 
   const lastTickVal = useRef<number>(settings.verticalOffset ?? 0.5)
   const horizontalTab = useStore((s) => s.settingsTab)
@@ -1911,14 +1912,14 @@ export function Settings({
                   </div>
 
                   {/* Card 1: Language */}
-                  <div className="setting-card">
+                  <div className={`setting-card${verticalLangDropdownOpen ? ' dropdown-active' : ''}`}>
                     <div className="shelf-card-top">
                       <div className="setting-group-label">{t('groups.general') || 'GENERAL'}</div>
                       <div className="setting-title">{t('behaviour.languageTitle')}</div>
                       <div className="setting-desc">{t('behaviour.languageDesc')}</div>
                     </div>
                     <div className="shelf-card-bottom">
-                      <LanguageDropdown />
+                      <LanguageDropdown onToggle={setVerticalLangDropdownOpen} />
                     </div>
                   </div>
 
@@ -2902,10 +2903,19 @@ export function Settings({
       )
     }
 
-function LanguageDropdown({ direction = 'down', compact = false }: { direction?: 'up' | 'down'; compact?: boolean } = {}) {
+function LanguageDropdown({
+  direction: propDirection = 'down',
+  compact = false,
+  onToggle
+}: {
+  direction?: 'up' | 'down'
+  compact?: boolean
+  onToggle?: (open: boolean) => void
+} = {}) {
   const { language, languages } = useTranslation()
   const patch = useStore((s) => s.patchSettings)
   const [isOpen, setIsOpen] = useState(false)
+  const [effectiveDirection, setEffectiveDirection] = useState<'up' | 'down'>(propDirection)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
 
@@ -2914,17 +2924,35 @@ function LanguageDropdown({ direction = 'down', compact = false }: { direction?:
 
   const selectedLang = languages.find((l) => l.code === (language || 'system')) || languages[0]
 
+  const handleToggle = () => {
+    playButtonClickSound()
+    const next = !isOpen
+    if (next && dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+        setEffectiveDirection('up')
+      } else {
+        setEffectiveDirection('down')
+      }
+    }
+    setIsOpen(next)
+    onToggle?.(next)
+  }
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false)
+        onToggle?.(false)
       }
     }
     if (isOpen) {
       window.addEventListener('mousedown', handleClickOutside)
     }
     return () => window.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
+  }, [isOpen, onToggle])
 
   useEffect(() => {
     if (isOpen && listRef.current) {
@@ -2940,13 +2968,14 @@ function LanguageDropdown({ direction = 'down', compact = false }: { direction?:
   }, [isOpen, selectedLang.code])
 
   return (
-    <div ref={dropdownRef} style={{ position: 'relative', width: '100%' }}>
+    <div
+      ref={dropdownRef}
+      className={`custom-dropdown-container ${isOpen ? 'is-open' : ''}`}
+      style={{ position: 'relative', width: '100%', zIndex: isOpen ? 100 : undefined }}
+    >
       <button
         type="button"
-        onClick={() => {
-          playButtonClickSound()
-          setIsOpen(!isOpen)
-        }}
+        onClick={handleToggle}
         style={{
           width: '100%',
           height: compact ? 28 : 'auto',
@@ -2982,24 +3011,24 @@ function LanguageDropdown({ direction = 'down', compact = false }: { direction?:
         {isOpen && (
           <motion.div
             ref={listRef}
-            initial={{ opacity: 0, y: direction === 'up' ? -6 : 6, scale: 0.98 }}
+            initial={{ opacity: 0, y: effectiveDirection === 'up' ? -6 : 6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: direction === 'up' ? -6 : 6, scale: 0.98 }}
+            exit={{ opacity: 0, y: effectiveDirection === 'up' ? -6 : 6, scale: 0.98 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             style={{
               position: 'absolute',
-              top: direction === 'up' ? 'auto' : 'calc(100% + 6px)',
-              bottom: direction === 'up' ? 'calc(100% + 5px)' : 'auto',
+              top: effectiveDirection === 'up' ? 'auto' : 'calc(100% + 6px)',
+              bottom: effectiveDirection === 'up' ? 'calc(100% + 5px)' : 'auto',
               left: 0,
               right: 0,
-              maxHeight: direction === 'up' ? (compact ? 88 : 140) : 180,
+              maxHeight: effectiveDirection === 'up' ? (compact ? 120 : 180) : 220,
               overflowY: 'auto',
-              background: '#121214',
-              border: '1px solid rgba(255, 255, 255, 0.14)',
+              background: '#161618',
+              border: '1px solid rgba(255, 255, 255, 0.18)',
               borderRadius: 10,
               padding: '4px',
-              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-              zIndex: 100,
+              boxShadow: '0 16px 36px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+              zIndex: 1000,
               scrollbarWidth: 'none'
             }}
           >
@@ -3014,6 +3043,7 @@ function LanguageDropdown({ direction = 'down', compact = false }: { direction?:
                     playButtonClickSound()
                     patch({ language: lang.code })
                     setIsOpen(false)
+                    onToggle?.(false)
                   }}
                   style={{
                     width: '100%',

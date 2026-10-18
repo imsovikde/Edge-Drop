@@ -204,10 +204,15 @@
   gap: 8px;
   box-sizing: border-box;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   user-select: none;
   -webkit-user-select: none;
   transition: background 0.14s ease;
+}
+
+.setting-card.dropdown-active,
+.setting-card:has(.custom-dropdown-container.is-open) {
+  z-index: 50;
 }
 
 .setting-card::before {
