@@ -25,8 +25,10 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName, calculateTextMetrics } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon } from './icons'
 import { QuickMobileModal } from './QuickMobileModal'
+import { cleanUrl } from '../lib/cleanUrl'
+
 
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { CodeBlock } from './CodeBlock'
@@ -242,6 +244,13 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
     return null
   }, [item.data])
 
+  const cleanUrlResult = useMemo(() => {
+    if (item.data.kind === 'text' && item.data.isUrl) {
+      return cleanUrl(item.data.text)
+    }
+    return null
+  }, [item.data])
+
   const sensitiveInfo = useMemo(() => {
     if (item.data.kind === 'text') {
       return detectSensitiveToken(item.data.text)
@@ -347,10 +356,19 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const onCopy = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     playCopySuccessSound()
+    if (settings.cleanUrlsOnCopy && item.data.kind === 'text' && item.data.isUrl) {
+      const sanitized = cleanUrl(item.data.text)
+      if (sanitized.hasTracking) {
+        navigator.clipboard.writeText(sanitized.cleanedUrl).catch(() => {})
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 900)
+        return
+      }
+    }
     copy(item.id)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 900)
-  }, [copy, item.id])
+  }, [copy, item.id, item.data, settings.cleanUrlsOnCopy])
 
   const onPaste = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -653,6 +671,28 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
                       <span>{textMetrics.words}w • {textMetrics.readingTime}</span>
                     </span>
                   )}
+                  {cleanUrlResult?.hasTracking && (
+                    <span
+                      className="meta-sanitized-badge"
+                      title={`Contains ${cleanUrlResult.removedParams.length} tracking parameter${cleanUrlResult.removedParams.length > 1 ? 's' : ''}: ${cleanUrlResult.removedParams.join(', ')}`}
+                      style={{
+                        fontSize: 9,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                        color: '#fbbf24',
+                        fontWeight: 600,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}
+                    >
+                      <span>{cleanUrlResult.removedParams.length} {cleanUrlResult.removedParams.length === 1 ? 'TRACKER' : 'TRACKERS'}</span>
+                    </span>
+                  )}
                   {sensitiveInfo.isSensitive && (
 
                     <span
@@ -766,6 +806,30 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
               }}
             >
               <ExternalLinkIcon />
+            </button>
+          )}
+          {cleanUrlResult?.hasTracking && (
+            <button
+              className="act"
+              title={`Copy clean link (strips ${cleanUrlResult.removedParams.length} tracking parameter${cleanUrlResult.removedParams.length > 1 ? 's' : ''}: ${cleanUrlResult.removedParams.join(', ')})`}
+              onClick={async (e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                e.currentTarget.blur()
+                playCopySuccessSound()
+                try {
+                  await navigator.clipboard.writeText(cleanUrlResult.cleanedUrl)
+                  useStore.getState().pushToast({
+                    id: `clean-url-${Date.now()}`,
+                    message: `Clean link copied (${cleanUrlResult.removedParams.length} tracker${cleanUrlResult.removedParams.length > 1 ? 's' : ''} removed)`,
+                    tone: 'info'
+                  })
+                } catch (err) {
+                  console.error('Failed to copy clean URL', err)
+                }
+              }}
+            >
+              <SparklesIcon width={12} height={12} />
             </button>
           )}
           {item.data.kind === 'text' && (

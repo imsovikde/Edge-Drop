@@ -15,7 +15,7 @@ import {
   CopyIndicatorIcon,
   SparkleIndicatorIcon
 } from './CopyIndicatorCurve'
-import { ChevronRightIcon, CloseIcon, LogOutIcon, StarIcon, InfoIcon, GithubOctocatLogo, MicrosoftStoreLogo, ShieldIcon } from './icons'
+import { ChevronRightIcon, CloseIcon, LogOutIcon, StarIcon, InfoIcon, GithubOctocatLogo, MicrosoftStoreLogo, ShieldIcon, SparklesIcon } from './icons'
 import { HotkeyRecorder } from './HotkeyRecorder'
 import { SlideCommit } from './SlideCommit'
 import { WakeSlider } from './WakeSlider'
@@ -485,7 +485,7 @@ export function Settings({
             </button>
           </div>
           <div className="app-version-footer">
-            <span>{t('footer.version')} {currentVersion || '2.3.0'}</span>
+            <span>{t('footer.version')} {currentVersion || '2.4.0'}</span>
             <span className="version-separator">·</span>
             <button
               type="button"
@@ -855,7 +855,7 @@ export function Settings({
                   <span>{t('behaviour.isUpToDate')}</span>
                 </div>
                 <div className="manual-update-desc">
-                  {t('footer.version')} {currentVersion || '2.3.0'}
+                  {t('footer.version')} {currentVersion || '2.4.0'}
                 </div>
               </div>
               <button
@@ -895,7 +895,7 @@ export function Settings({
               <div className="manual-update-info">
                 <div className="manual-update-title">{t('behaviour.checkForUpdates')}</div>
                 <div className="manual-update-desc">
-                  {t('footer.version')} {currentVersion || '2.3.0'}
+                  {t('footer.version')} {currentVersion || '2.4.0'}
                 </div>
               </div>
               <button
@@ -1007,7 +1007,7 @@ export function Settings({
       <div className="settings-shelf-card about-card" style={{ width: 280 }}>
         <div className="shelf-card-top">
           <div className="setting-group-label">{t('groups.aboutEdgeDrop') || 'ABOUT EDGE-DROP'}</div>
-          <div className="setting-title">Edge-Drop v{currentVersion || '2.3.0'}</div>
+          <div className="setting-title">Edge-Drop v{currentVersion || '2.4.0'}</div>
           <div className="setting-desc">{t('footer.feedbackDesc')}</div>
         </div>
         <div className="shelf-card-bottom">
@@ -1177,6 +1177,31 @@ export function Settings({
                     <Toggle
                       checked={settings.maskSensitiveTokens ?? true}
                       onChange={(v) => patch({ maskSensitiveTokens: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3b: Clean Links on Copy */}
+              <div className="settings-shelf-card privacy-card behaviour-col">
+                <div className="shelf-card-top">
+                  <div className="setting-group-label">LINK PRIVACY</div>
+                </div>
+                <div className="shelf-card-inline">
+                  <div className="shelf-card-inline-text">
+                    <div className="setting-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <SparklesIcon width={14} height={14} style={{ color: '#fbbf24' }} />
+                      <span>Clean Links on Copy</span>
+                    </div>
+                    <div className="setting-desc">Automatically strip marketing and tracking parameters (UTM, Facebook fbclid, Google gclid, YouTube si) when copying links</div>
+                  </div>
+                  <div className="shelf-card-inline-action">
+                    <Toggle
+                      checked={settings.cleanUrlsOnCopy ?? false}
+                      onChange={(v) => {
+                        if (v) playToggleSound(true)
+                        patch({ cleanUrlsOnCopy: v })
+                      }}
                     />
                   </div>
                 </div>
@@ -1437,7 +1462,7 @@ export function Settings({
                     <div className="setting-desc">
                       {checkState.status === 'error'
                         ? (checkState.error || t('behaviour.updateCheckFailed'))
-                        : `Edge-Drop v${currentVersion || '2.3.0'}`}
+                        : `Edge-Drop v${currentVersion || '2.4.0'}`}
                     </div>
                   </div>
                   <div className="shelf-card-bottom">
@@ -1786,6 +1811,30 @@ export function Settings({
                     />
                   </div>
                 </div>
+                {(settings.soundEffects ?? true) && (
+                  <div className="shelf-card-bottom" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim, #888)', marginBottom: 6 }}>Volume Level</div>
+                    <div className="setting-pills">
+                      {[
+                        { label: '25%', val: 0.25 },
+                        { label: '50%', val: 0.50 },
+                        { label: '75%', val: 0.75 },
+                        { label: '100%', val: 1.0 }
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          className={`pill ${Math.abs((settings.soundEffectsVolume ?? 0.75) - opt.val) < 0.05 ? 'active' : ''}`}
+                          onClick={() => {
+                            patch({ soundEffectsVolume: opt.val })
+                            setTimeout(() => playDialTickSound(), 50)
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* ── SUB-GROUP 3 DIVIDER: Community & Support ── */}
@@ -1933,6 +1982,31 @@ export function Settings({
                         <Toggle
                           checked={settings.maskSensitiveTokens ?? true}
                           onChange={(v) => patch({ maskSensitiveTokens: v })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3c: Clean Links on Copy */}
+                  <div className="setting-card">
+                    <div className="shelf-card-top">
+                      <div className="setting-group-label">LINK PRIVACY</div>
+                    </div>
+                    <div className="shelf-card-inline">
+                      <div className="shelf-card-inline-text">
+                        <div className="setting-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <SparklesIcon width={14} height={14} style={{ color: '#fbbf24' }} />
+                          <span>Clean Links on Copy</span>
+                        </div>
+                        <div className="setting-desc">Automatically strip marketing and tracking parameters (UTM, Facebook fbclid, Google gclid, YouTube si) when copying links</div>
+                      </div>
+                      <div className="shelf-card-inline-action">
+                        <Toggle
+                          checked={settings.cleanUrlsOnCopy ?? false}
+                          onChange={(v) => {
+                            if (v) playToggleSound(true)
+                            patch({ cleanUrlsOnCopy: v })
+                          }}
                         />
                       </div>
                     </div>
@@ -2778,6 +2852,30 @@ export function Settings({
                         />
                       </div>
                     </div>
+                    {(settings.soundEffects ?? true) && (
+                      <div className="shelf-card-bottom" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-dim, #888)', marginBottom: 6 }}>Volume Level</div>
+                        <div className="setting-pills">
+                          {[
+                            { label: '25%', val: 0.25 },
+                            { label: '50%', val: 0.50 },
+                            { label: '75%', val: 0.75 },
+                            { label: '100%', val: 1.0 }
+                          ].map((opt) => (
+                            <button
+                              key={opt.label}
+                              className={`pill ${Math.abs((settings.soundEffectsVolume ?? 0.75) - opt.val) < 0.05 ? 'active' : ''}`}
+                              onClick={() => {
+                                patch({ soundEffectsVolume: opt.val })
+                                setTimeout(() => playDialTickSound(), 50)
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {PersistentFooter}

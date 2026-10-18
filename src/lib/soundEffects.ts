@@ -7,14 +7,36 @@ import { useStore } from '../store/appStore'
 
 let audioCtx: any = null
 
-function isSoundEnabled(): boolean {
+export function isSoundEnabled(): boolean {
   const win = typeof globalThis !== 'undefined' ? (globalThis as any).window : undefined
   if (!win) return false
   try {
-    return useStore.getState().settings.soundEffects !== false
+    return useStore.getState().settings.soundEffects !== false && getSoundVolume() > 0.001
   } catch {
     return true
   }
+}
+
+export function getSoundVolume(): number {
+  try {
+    const vol = useStore.getState().settings.soundEffectsVolume
+    if (typeof vol === 'number' && !isNaN(vol)) {
+      return Math.max(0, Math.min(1, vol))
+    }
+    return 0.75
+  } catch {
+    return 0.75
+  }
+}
+
+export function getMasterDestination(ctx: any): any {
+  if (!ctx._masterGain) {
+    ctx._masterGain = ctx.createGain()
+    ctx._masterGain.connect(ctx.destination)
+  }
+  const vol = getSoundVolume()
+  ctx._masterGain.gain.setValueAtTime(vol, ctx.currentTime)
+  return ctx._masterGain
 }
 
 function getAudioContext(): any | null {
@@ -32,6 +54,7 @@ function getAudioContext(): any | null {
   }
   return audioCtx
 }
+
 
 /**
  * Idle warmup for the shared AudioContext.
@@ -92,7 +115,7 @@ export function playDialTickSound(): void {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.01)
 
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
 
       osc.start(now)
       osc.stop(now + 0.01)
@@ -109,7 +132,7 @@ export function playDialTickSound(): void {
       bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.012)
 
       bodyOsc.connect(bodyGain)
-      bodyGain.connect(ctx.destination)
+      bodyGain.connect(getMasterDestination(ctx))
 
       bodyOsc.start(now)
       bodyOsc.stop(now + 0.012)
@@ -152,7 +175,7 @@ export function playToggleSound(enabled: boolean): void {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.014)
 
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
 
       osc.start(now)
       osc.stop(now + 0.014)
@@ -169,7 +192,7 @@ export function playToggleSound(enabled: boolean): void {
       bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.016)
 
       bodyOsc.connect(bodyGain)
-      bodyGain.connect(ctx.destination)
+      bodyGain.connect(getMasterDestination(ctx))
 
       bodyOsc.start(now)
       bodyOsc.stop(now + 0.016)
@@ -208,7 +231,7 @@ export function playButtonClickSound(): void {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.009)
 
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
 
       osc.start(now)
       osc.stop(now + 0.009)
@@ -249,7 +272,7 @@ export function playDeleteSound(): void {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.014)
 
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
 
       osc.start(now)
       osc.stop(now + 0.014)
@@ -266,7 +289,7 @@ export function playDeleteSound(): void {
       bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.016)
 
       bodyOsc.connect(bodyGain)
-      bodyGain.connect(ctx.destination)
+      bodyGain.connect(getMasterDestination(ctx))
 
       bodyOsc.start(now)
       bodyOsc.stop(now + 0.016)
@@ -308,7 +331,7 @@ export function playExpandSound(expanding: boolean): void {
       gain.gain.exponentialRampToValueAtTime(0.001, now + dur)
 
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
 
       osc.start(now)
       osc.stop(now + dur)
@@ -324,7 +347,7 @@ export function playExpandSound(expanding: boolean): void {
       bodyGain.gain.exponentialRampToValueAtTime(0.001, now + dur + 0.004)
 
       bodyOsc.connect(bodyGain)
-      bodyGain.connect(ctx.destination)
+      bodyGain.connect(getMasterDestination(ctx))
 
       bodyOsc.start(now)
       bodyOsc.stop(now + dur + 0.004)
@@ -367,7 +390,7 @@ export function playCardExpandSound(expanding: boolean): void {
       gain.gain.exponentialRampToValueAtTime(0.001, now + dur)
 
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
 
       osc.start(now)
       osc.stop(now + dur)
@@ -384,7 +407,7 @@ export function playCardExpandSound(expanding: boolean): void {
       harmonicGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.8)
 
       harmonicOsc.connect(harmonicGain)
-      harmonicGain.connect(ctx.destination)
+      harmonicGain.connect(getMasterDestination(ctx))
 
       harmonicOsc.start(now)
       harmonicOsc.stop(now + dur * 0.8)
@@ -420,7 +443,7 @@ export function playEdgeRetractSound(): void {
       gain.gain.setValueAtTime(0.09, now)
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
       osc.start(now)
       osc.stop(now + 0.08)
 
@@ -433,7 +456,7 @@ export function playEdgeRetractSound(): void {
       bodyGain.gain.setValueAtTime(0.08, now + 0.06)
       bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11)
       bodyOsc.connect(bodyGain)
-      bodyGain.connect(ctx.destination)
+      bodyGain.connect(getMasterDestination(ctx))
       bodyOsc.start(now + 0.06)
       bodyOsc.stop(now + 0.11)
     }
@@ -467,7 +490,7 @@ export function playEdgeBeaconAppearSound(): void {
       gain.gain.setValueAtTime(0.07, now)
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045)
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
       osc.start(now)
       osc.stop(now + 0.045)
     }
@@ -502,7 +525,7 @@ export function playEdgeExpandSound(): void {
       gain.gain.setValueAtTime(0.08, now)
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06)
       osc.connect(gain)
-      gain.connect(ctx.destination)
+      gain.connect(getMasterDestination(ctx))
       osc.start(now)
       osc.stop(now + 0.06)
 
@@ -515,7 +538,7 @@ export function playEdgeExpandSound(): void {
       snapGain.gain.setValueAtTime(0.10, now + 0.02)
       snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07)
       snapOsc.connect(snapGain)
-      snapGain.connect(ctx.destination)
+      snapGain.connect(getMasterDestination(ctx))
       snapOsc.start(now + 0.02)
       snapOsc.stop(now + 0.07)
     }
@@ -555,7 +578,7 @@ export function playCopySuccessSound(): void {
       chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
 
       chime.connect(chimeGain)
-      chimeGain.connect(ctx.destination)
+      chimeGain.connect(getMasterDestination(ctx))
       chime.start(now)
       chime.stop(now + 0.08)
 
@@ -570,7 +593,7 @@ export function playCopySuccessSound(): void {
       popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035)
 
       pop.connect(popGain)
-      popGain.connect(ctx.destination)
+      popGain.connect(getMasterDestination(ctx))
       pop.start(now)
       pop.stop(now + 0.035)
     }

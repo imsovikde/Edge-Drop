@@ -214,8 +214,13 @@ export interface Settings {
   showEdgeLocationHint?: boolean
   /** When true, plays tactile audio sound effects for sliders, buttons, and switches. Default: true. */
   soundEffects?: boolean
+  /** Volume level for tactile sound effects (0.0 to 1.0). Default: 0.75. */
+  soundEffectsVolume?: number
+  /** When true, automatically strips marketing/tracking parameters when copying URLs. Default: false. */
+  cleanUrlsOnCopy?: boolean
   /** Last version for which the user opened/viewed the What's New changelog panel. */
   lastSeenChangelogVersion?: string
+
   /** When true, hovering cursor near edge activates the panel. When false, panel opens exclusively via Alt + C. Default: true. */
   hoverActivation?: boolean
   /**
@@ -372,7 +377,10 @@ export const DEFAULT_SETTINGS: Settings = {
   triggerAlignment: 'center',
   showEdgeLocationHint: false,
   soundEffects: true,
+  soundEffectsVolume: 0.75,
+  cleanUrlsOnCopy: false,
   lastSeenChangelogVersion: undefined,
+
   hoverActivation: true,
   hoverOpenDelay: 0,
   fontSizeScale: 1.0,
