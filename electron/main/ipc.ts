@@ -474,6 +474,14 @@ export function registerIpc(): void {
     return getStore().getFullText(id)
   })
 
+  handle('item:update-text', (id, text) => {
+    const ok = getStore().updateText(id, text)
+    if (ok) {
+      pushState.items()
+    }
+    return ok
+  })
+
   handle('item:copy', async (id) => {
     const item = getStore().get(id)
     console.log('[IPC] item:copy id=', id, 'found=', !!item)

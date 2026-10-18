@@ -380,6 +380,34 @@ export class ItemStore {
     return this.toDto()
   }
 
+  updateText(id: string, newText: string): boolean {
+    const it = this.items.find((x) => x.id === id)
+    if (!it || it.data.kind !== 'text') return false
+
+    const oldSig = contentSignature(it.data)
+    this.sigToId.delete(oldSig)
+
+    const textData = it.data as any
+    if (newText.length > 300) {
+      this.writeTextPayload(id, newText)
+      textData.hasFullPayload = true
+      textData.previewText = newText.slice(0, 300)
+      textData.text = textData.previewText
+    } else {
+      this.removeTextPayload(id)
+      textData.hasFullPayload = false
+      textData.previewText = undefined
+      textData.text = newText
+    }
+
+    const newSig = contentSignature(it.data)
+    this.sigToId.set(newSig, it.id)
+
+    this.persist()
+    this.onMutation?.({ type: 'upsert', item: it })
+    return true
+  }
+
   delete(id: string): void {
     const idx = this.items.findIndex((x) => x.id === id)
     if (idx < 0) return

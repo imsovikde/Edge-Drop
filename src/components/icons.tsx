@@ -120,6 +120,7 @@ export const TypeIcon = uiIcon('textT')
 export const FilesIcon = uiIcon('files')
 export const PaletteIcon = uiIcon('palette')
 export const TagIcon = uiIcon('tag')
+export const EditIcon = uiIcon('pencilSimple')
 
 export const EmojiSmileIcon = uiIcon('smiley', 18)
 export const EmojiClockIcon = (p: P) => <ClockIcon width={p.width ?? 18} height={p.height ?? 18} {...(p as any)} />

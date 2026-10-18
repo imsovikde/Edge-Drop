@@ -164,6 +164,7 @@ interface AppState {
   togglePin: (id: string, pinned: boolean) => Promise<void>
   setColorTag: (id: string, colorTag: import('../../shared/types').ColorTag | null) => Promise<void>
   setTags: (id: string, tags: string[]) => Promise<void>
+  updateText: (id: string, text: string) => Promise<boolean>
   remove: (id: string) => Promise<void>
   clear: (ids?: string[]) => Promise<void>
   copy: (id: string) => Promise<void>
@@ -582,6 +583,28 @@ export const useStore = create<AppState>((set, get) => ({
     })
     const items = await edge.setTags(id, tags)
     set({ items })
+  },
+
+  async updateText(id, text) {
+    const ok = await edge.updateItemText(id, text)
+    if (ok) {
+      set({
+        items: get().items.map((it) => {
+          if (it.id !== id || it.data.kind !== 'text') return it
+          const preview = text.slice(0, 300)
+          return {
+            ...it,
+            data: {
+              ...it.data,
+              text: preview,
+              previewText: preview,
+              hasFullPayload: text.length > 300
+            }
+          }
+        })
+      })
+    }
+    return ok
   },
 
   async remove(id) {

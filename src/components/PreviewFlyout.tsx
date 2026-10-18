@@ -3,11 +3,22 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/appStore'
 import { formatBytes, formatImageDisplayName } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
-import { FileKindIcon, FolderOpenIcon, CopyIcon, CheckIcon, ExternalLinkIcon, CloseIcon, GlobeIcon } from './icons'
+import { FileKindIcon, FolderOpenIcon, CopyIcon, CheckIcon, ExternalLinkIcon, CloseIcon, GlobeIcon, EditIcon, SparklesIcon } from './icons'
 import { parseUrlPreview } from '../lib/urlPreview'
 import { parseColor } from '../lib/colorUtils'
 import { detectCode } from '../lib/codeDetect'
 import { CodeBlock } from './CodeBlock'
+import {
+  jsonPrettify,
+  jsonMinify,
+  toCamelCase,
+  toSnakeCase,
+  toKebabCase,
+  toConstantCase,
+  toTitleCase,
+  cleanWhitespace,
+  tableToMarkdown
+} from '../lib/smartTransforms'
 import { createPortal } from 'react-dom'
 import { useAdaptiveSpring } from '../hooks/useAdaptiveSpring'
 import { useDragOut } from '../hooks/useDragOut'
@@ -528,6 +539,271 @@ function SelectionBadge({
   )
 }
 
+function TextPreviewAndEditor({
+  item,
+  activeText,
+  codeInfo,
+  onTextUpdated
+}: {
+  item: any
+  activeText: string
+  codeInfo: ReturnType<typeof detectCode>
+  onTextUpdated: (newText: string) => void
+}) {
+  const { t } = useTranslation()
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftText, setDraftText] = useState(activeText)
+  const [transformMenuOpen, setTransformMenuOpen] = useState(false)
+  const [transformFeedback, setTransformFeedback] = useState<string | null>(null)
+  const updateText = useStore((s) => s.updateText)
+  const pushToast = useStore((s) => s.pushToast)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setDraftText(activeText)
+  }, [activeText])
+
+  useEffect(() => {
+    if (!transformMenuOpen) return
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setTransformMenuOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onDocClick)
+    return () => window.removeEventListener('pointerdown', onDocClick)
+  }, [transformMenuOpen])
+
+  const handleApplyTransform = async (
+    transformFn: (t: string) => string | { success: boolean; result: string; error?: string },
+    label: string
+  ) => {
+    playButtonClickSound()
+    const target = isEditing ? draftText : activeText
+    const res = transformFn(target)
+    const newText = typeof res === 'string' ? res : res.success ? res.result : null
+
+    if (newText === null) {
+      const err = typeof res !== 'string' ? res.error : 'Transform failed'
+      pushToast({ id: `tr-err-${Date.now()}`, message: err || 'Transform failed', tone: 'error' })
+      return
+    }
+
+    if (isEditing) {
+      setDraftText(newText)
+    } else {
+      await updateText(item.id, newText)
+      onTextUpdated(newText)
+    }
+
+    setTransformMenuOpen(false)
+    setTransformFeedback(label)
+    setTimeout(() => setTransformFeedback(null), 1200)
+  }
+
+  const handleSaveEdit = async () => {
+    playButtonClickSound()
+    if (draftText !== activeText) {
+      await updateText(item.id, draftText)
+      onTextUpdated(draftText)
+    }
+    setIsEditing(false)
+  }
+
+  const handleCancelEdit = () => {
+    playButtonClickSound()
+    setDraftText(activeText)
+    setIsEditing(false)
+  }
+
+  const TRANSFORMS = [
+    { label: 'Format JSON', fn: (s: string) => jsonPrettify(s) },
+    { label: 'Minify JSON', fn: (s: string) => jsonMinify(s) },
+    { label: 'Markdown Table', fn: (s: string) => tableToMarkdown(s) },
+    { label: 'camelCase', fn: (s: string) => toCamelCase(s) },
+    { label: 'snake_case', fn: (s: string) => toSnakeCase(s) },
+    { label: 'kebab-case', fn: (s: string) => toKebabCase(s) },
+    { label: 'CONSTANT_CASE', fn: (s: string) => toConstantCase(s) },
+    { label: 'Title Case', fn: (s: string) => toTitleCase(s) },
+    { label: 'Clean Lines', fn: (s: string) => cleanWhitespace(s) }
+  ]
+
+  const textToDisplay = activeText.length > 20000
+    ? activeText.slice(0, 20000) + `\n\n${t('flyout.contentTruncated')}`
+    : activeText
+
+  return (
+    <div
+      onClick={(e) => {
+        if (isEditing) return
+        const sel = window.getSelection()?.toString()
+        if (sel && sel.trim().length > 0) return
+        e.stopPropagation()
+        tryPaste(() => useStore.getState().paste(item.id))
+      }}
+      title={isEditing ? undefined : t('flyout.clickToPaste')}
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10, cursor: isEditing ? 'default' : 'pointer', width: '100%' }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, position: 'sticky', top: 0, zIndex: 10 }}>
+        {transformFeedback && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#30d158', background: 'rgba(48, 209, 88, 0.12)', padding: '2px 8px', borderRadius: 999 }}>
+            ✓ {transformFeedback}
+          </span>
+        )}
+
+        <div className="act-pill" style={{ position: 'relative' }} ref={menuRef}>
+          <button
+            type="button"
+            className={`act${transformMenuOpen ? ' active' : ''}`}
+            title="Smart transforms"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              playButtonClickSound()
+              setTransformMenuOpen(!transformMenuOpen)
+            }}
+          >
+            <SparklesIcon width={13} height={13} />
+          </button>
+
+          {transformMenuOpen && (
+            <div
+              className="transform-dropdown-menu"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+              }}
+            >
+              <div className="transform-dropdown-header">Smart Transforms</div>
+              <div className="transform-dropdown-list">
+                {TRANSFORMS.map((tr) => (
+                  <button
+                    key={tr.label}
+                    type="button"
+                    className="transform-dropdown-item"
+                    onClick={() => handleApplyTransform(tr.fn, tr.label)}
+                  >
+                    {tr.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className={`act${isEditing ? ' active' : ''}`}
+            title={isEditing ? 'Cancel editing' : 'Edit text'}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              playButtonClickSound()
+              if (isEditing) {
+                handleCancelEdit()
+              } else {
+                setIsEditing(true)
+              }
+            }}
+          >
+            <EditIcon width={13} height={13} />
+          </button>
+
+          {!isEditing && (
+            <QuickActionButton
+              title={t('flyout.copyText')}
+              icon={CopyIcon}
+              onClick={() => useStore.getState().copy(item.id)}
+            />
+          )}
+        </div>
+      </div>
+
+      {isEditing ? (
+        <div
+          className="flyout-editor-box"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <textarea
+            className="flyout-editor-textarea"
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault()
+                handleSaveEdit()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                handleCancelEdit()
+              } else if (e.key === 'Tab') {
+                e.preventDefault()
+                const target = e.currentTarget
+                const start = target.selectionStart
+                const end = target.selectionEnd
+                const next = draftText.substring(0, start) + '  ' + draftText.substring(end)
+                setDraftText(next)
+                setTimeout(() => {
+                  target.selectionStart = target.selectionEnd = start + 2
+                }, 0)
+              }
+            }}
+            autoFocus
+            spellCheck={false}
+          />
+
+          <div className="flyout-editor-footer">
+            <div className="flyout-editor-stats">
+              <span>{draftText.length} chars</span>
+              <span>·</span>
+              <span>{draftText.split(/\r?\n/).length} lines</span>
+              <span>·</span>
+              <span>{draftText.trim() ? draftText.trim().split(/\s+/).length : 0} words</span>
+            </div>
+
+            <div className="flyout-editor-buttons">
+              <button
+                type="button"
+                className="flyout-btn"
+                onClick={handleCancelEdit}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flyout-btn primary"
+                onClick={handleSaveEdit}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : codeInfo.isCode ? (
+        <CodeBlock
+          code={textToDisplay}
+          language={codeInfo.language}
+          showFrame={false}
+          showHeader={false}
+          showLineNumbers={true}
+          showCopyButton={false}
+        />
+      ) : (
+        <div style={{
+          color: 'rgba(255,255,255,0.88)',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          fontSize: 13.5,
+          lineHeight: 1.65,
+          fontFamily: 'var(--font-ui)',
+          fontWeight: 400,
+          letterSpacing: '0.01em'
+        }}>
+          {textToDisplay}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PreviewContent({
   item,
   selectedKeys,
@@ -552,9 +828,6 @@ function PreviewContent({
 
   if (item.data.kind === 'text') {
     const activeText = fullText ?? item.data.text
-    const text: string = activeText.length > 20000
-      ? activeText.slice(0, 20000) + `\n\n${t('flyout.contentTruncated')}`
-      : activeText
     const isUrl = item.data.isUrl
 
     if (isUrl) {
@@ -699,72 +972,13 @@ function PreviewContent({
     }
 
     const codeInfo = detectCode(activeText)
-    if (codeInfo.isCode) {
-      return (
-        <div
-          onClick={(e) => {
-            const sel = window.getSelection()?.toString()
-            if (sel && sel.trim().length > 0) return
-            e.stopPropagation()
-            tryPaste(() => useStore.getState().paste(item.id))
-          }}
-          title={t('flyout.clickToPaste')}
-          style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer', width: '100%' }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, position: 'sticky', top: 0, zIndex: 2 }}>
-            <div className="act-pill">
-              <QuickActionButton
-              title={t('flyout.copyText')}
-                icon={CopyIcon}
-                onClick={() => useStore.getState().copy(item.id)}
-              />
-            </div>
-          </div>
-          <CodeBlock
-            code={text}
-            language={codeInfo.language}
-            showFrame={false}
-            showHeader={false}
-            showLineNumbers={true}
-            showCopyButton={false}
-          />
-        </div>
-      )
-    }
-
     return (
-      <div
-        onClick={(e) => {
-          const sel = window.getSelection()?.toString()
-          if (sel && sel.trim().length > 0) return
-          e.stopPropagation()
-          tryPaste(() => useStore.getState().paste(item.id))
-        }}
-        title={t('flyout.clickToPaste')}
-        style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, position: 'sticky', top: 0, zIndex: 2 }}>
-          <div className="act-pill">
-            <QuickActionButton
-            title={t('flyout.copyText')}
-              icon={CopyIcon}
-              onClick={() => useStore.getState().copy(item.id)}
-            />
-          </div>
-        </div>
-        <div style={{
-          color: 'rgba(255,255,255,0.88)',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          fontSize: 13.5,
-          lineHeight: 1.65,
-          fontFamily: 'var(--font-ui)',
-          fontWeight: 400,
-          letterSpacing: '0.01em'
-        }}>
-          {text}
-        </div>
-      </div>
+      <TextPreviewAndEditor
+        item={item}
+        activeText={activeText}
+        codeInfo={codeInfo}
+        onTextUpdated={(t) => setFullText(t)}
+      />
     )
   }
   

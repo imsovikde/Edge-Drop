@@ -40,6 +40,9 @@ export interface InvokeMap {
   /** Fetch the full text payload from disk for a large text item on-demand. */
   'item:get-full-text': { args: [id: string]; result: string }
 
+  /** Update an existing text item's content directly. */
+  'item:update-text': { args: [id: string, text: string]; result: boolean }
+
   /** Remove a specific sub-item from a bundle. */
   'item:remove-subitem': { args: [req: DragRequest]; result: boolean }
 

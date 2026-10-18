@@ -72,6 +72,7 @@ describe('preview flyout buttons use the shared styles', () => {
   })
 
   it('standalone quick actions sit in a pill', () => {
-    expect(flyout.split('className="act-pill"').length - 1).toBe(5)
+    // 4 preview sections (url, color, image, and unified text/code editor) each house quick actions in an act-pill
+    expect(flyout.split('className="act-pill"').length - 1).toBe(4)
   })
 })
