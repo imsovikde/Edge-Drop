@@ -147,7 +147,7 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
     }
   }, [item?.id, panelTop, panelH, isHorizontal, isTop, dockLeft, flyoutLeft, flyoutWidth])
 
-  // Dismiss preview flyout when user clicks inside the clipboard shelf (outside the flyout)
+  // Dismiss preview flyout when user clicks inside the clipboard shelf (outside the flyout) or presses Escape
   useEffect(() => {
     if (!previewItemId) return
 
@@ -172,9 +172,26 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
       }
     }
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Do not intercept if a modal overlay is already active above the flyout
+        const hasOpenModal = document.querySelector(
+          '.quick-mobile-modal-overlay, .item-export-modal-backdrop, .transform-modal-overlay'
+        )
+        if (hasOpenModal) return
+
+        e.stopPropagation()
+        e.preventDefault()
+        playButtonClickSound()
+        useStore.getState().setPreviewItemId(null)
+      }
+    }
+
     document.addEventListener('pointerdown', handlePointerDown, true)
+    window.addEventListener('keydown', handleKeyDown, true)
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true)
+      window.removeEventListener('keydown', handleKeyDown, true)
     }
   }, [previewItemId])
 
@@ -734,29 +751,36 @@ function TextPreviewAndEditor({
             <SparklesIcon width={13} height={13} />
           </button>
 
-          {transformMenuOpen && (
-            <div
-              className="transform-dropdown-menu"
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-              }}
-            >
-              <div className="transform-dropdown-header">Smart Transforms</div>
-              <div className="transform-dropdown-list">
-                {TRANSFORMS.map((tr) => (
-                  <button
-                    key={tr.label}
-                    type="button"
-                    className="transform-dropdown-item"
-                    onClick={() => handleApplyTransform(tr.fn, tr.label)}
-                  >
-                    {tr.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {transformMenuOpen && (
+              <motion.div
+                className="transform-dropdown-menu"
+                initial={{ opacity: 0, scale: 0.94, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  e.preventDefault()
+                }}
+              >
+                <div className="transform-dropdown-header">Smart Transforms</div>
+                <div className="transform-dropdown-list edge-custom-scrollbar">
+                  {TRANSFORMS.map((tr) => (
+                    <button
+                      key={tr.label}
+                      type="button"
+                      className="transform-dropdown-item"
+                      onClick={() => handleApplyTransform(tr.fn, tr.label)}
+                    >
+                      {tr.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <button
             type="button"
@@ -1217,6 +1241,26 @@ function PreviewContent({
   if (item.data.kind === 'image-collection') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 4px 4px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>
+            {item.data.images.length} Images
+          </div>
+          <div className="flyout-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <QuickActionButton
+              title={t('flyout.copyImage') || 'Copy all images'}
+              icon={CopyIcon}
+              onClick={() => useStore.getState().copy(item.id)}
+            />
+            <QuickActionButton
+              title={t('header.close') || 'Close preview (Esc)'}
+              icon={CloseIcon}
+              onClick={() => {
+                playButtonClickSound()
+                useStore.getState().setPreviewItemId(null)
+              }}
+            />
+          </div>
+        </div>
         {item.data.images.map((img: any, idx: number) => {
           const isSelected = selectedKeys?.has(img.imageId) ?? false
           return (
@@ -1348,6 +1392,14 @@ function PreviewContent({
                 path={p}
                 title={t('flyout.openInExplorer')}
               />
+              <QuickActionButton
+                title={t('header.close') || 'Close preview (Esc)'}
+                icon={CloseIcon}
+                onClick={() => {
+                  playButtonClickSound()
+                  useStore.getState().setPreviewItemId(null)
+                }}
+              />
             </div>
           </div>
         </div>
@@ -1411,6 +1463,14 @@ function PreviewContent({
                 path={p}
                 title={t('flyout.openInExplorer')}
               />
+              <QuickActionButton
+                title={t('header.close') || 'Close preview (Esc)'}
+                icon={CloseIcon}
+                onClick={() => {
+                  playButtonClickSound()
+                  useStore.getState().setPreviewItemId(null)
+                }}
+              />
             </div>
           </div>
         </div>
@@ -1424,7 +1484,28 @@ function PreviewContent({
     const useSingleColumn = hasImageFiles
 
     return (
-      <div style={{ display: useSingleColumn ? 'flex' : 'grid', flexDirection: useSingleColumn ? 'column' : undefined, gridTemplateColumns: useSingleColumn ? undefined : 'repeat(2, minmax(0, 1fr))', gap: 10, width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 4px 4px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>
+            {item.data.paths.length} Files
+          </div>
+          <div className="flyout-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <QuickActionButton
+              title={t('flyout.copyFile') || 'Copy files'}
+              icon={CopyIcon}
+              onClick={() => useStore.getState().copy(item.id)}
+            />
+            <QuickActionButton
+              title={t('header.close') || 'Close preview (Esc)'}
+              icon={CloseIcon}
+              onClick={() => {
+                playButtonClickSound()
+                useStore.getState().setPreviewItemId(null)
+              }}
+            />
+          </div>
+        </div>
+        <div style={{ display: useSingleColumn ? 'flex' : 'grid', flexDirection: useSingleColumn ? 'column' : undefined, gridTemplateColumns: useSingleColumn ? undefined : 'repeat(2, minmax(0, 1fr))', gap: 10, width: '100%', boxSizing: 'border-box' }}>
         {item.data.paths.map((p: string, i: number) => {
           const entry = item.data.entries?.[i]
           const info = getFileKind(p, entry?.isDirectory)
@@ -1580,6 +1661,7 @@ function PreviewContent({
             </div>
           )
         })}
+        </div>
       </div>
     )
   }

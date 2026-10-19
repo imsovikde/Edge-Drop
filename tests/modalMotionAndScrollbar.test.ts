@@ -84,6 +84,10 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
     // Action pills contain close buttons
     expect(previewFlyout).toContain("title={t('header.close') || 'Close preview (Esc)'}")
     expect(previewFlyout).toContain('setPreviewItemId(null)')
+    // Escape key listener for clean keyboard dismissal
+    expect(previewFlyout).toContain("if (e.key === 'Escape')")
+    // Transform dropdown animated with AnimatePresence and custom scrollbar
+    expect(previewFlyout).toContain('transform-dropdown-list edge-custom-scrollbar')
   })
 
   it('CardToolsMenu uses AnimatePresence and motion.div for floating popover', () => {
@@ -93,7 +97,19 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
     expect(cardToolsMenu).toContain('onPointerDown=')
   })
 
+  it('LanguageFlyout and IndicatorStyleFlyout close buttons protect against pointer hijacking', () => {
+    const langFlyout = read('src/components/LanguageFlyout.tsx')
+    const indicatorFlyout = read('src/components/IndicatorStyleFlyout.tsx')
+
+    expect(langFlyout).toContain('onPointerDown={(e) => e.stopPropagation()}')
+    expect(langFlyout).toContain('edge-custom-scrollbar')
+    expect(langFlyout).not.toContain("scrollbarWidth: 'none'")
+
+    expect(indicatorFlyout).toContain('onPointerDown={(e) => e.stopPropagation()}')
+  })
+
   it('CSS files define .edge-custom-scrollbar and keyframe animations', () => {
+    const panelCss = read('src/styles/panel.css')
     expect(globalCss).toContain('.edge-custom-scrollbar')
     expect(globalCss).toContain('.edge-custom-scrollbar::-webkit-scrollbar')
     expect(globalCss).toContain('@keyframes scaleIn')
@@ -103,5 +119,8 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
 
     expect(itemCss).toContain('.edge-custom-scrollbar')
     expect(itemCss).toContain('.edge-custom-scrollbar::-webkit-scrollbar')
+
+    // Transform dropdown does not suppress scrollbar
+    expect(panelCss).not.toMatch(/\.transform-dropdown-list\s*\{[^}]*scrollbar-width:\s*none/)
   })
 })

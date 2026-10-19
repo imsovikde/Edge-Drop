@@ -249,6 +249,7 @@ export function LanguageFlyout({ isRight }: { isRight: boolean }) {
               <button
                 type="button"
                 className="icon-btn"
+                onPointerDown={(e) => e.stopPropagation()}
                 style={{
                   width: 24,
                   height: 24,
@@ -276,6 +277,7 @@ export function LanguageFlyout({ isRight }: { isRight: boolean }) {
             {/* Clean Single-Column List (No Horizontal Scroll) */}
             <div
               ref={listRef}
+              className="edge-custom-scrollbar"
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -285,7 +287,6 @@ export function LanguageFlyout({ isRight }: { isRight: boolean }) {
                 paddingTop: 6,
                 paddingRight: 2,
                 maxHeight: 190,
-                scrollbarWidth: 'none',
                 boxSizing: 'border-box'
               }}
             >

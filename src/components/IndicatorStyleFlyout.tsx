@@ -245,6 +245,7 @@ export function IndicatorStyleFlyout({ isRight }: { isRight: boolean }) {
               <button
                 type="button"
                 className="icon-btn"
+                onPointerDown={(e) => e.stopPropagation()}
                 style={{
                   width: 24,
                   height: 24,
