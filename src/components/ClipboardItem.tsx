@@ -25,10 +25,11 @@ import { itemRenderKey } from '../lib/itemSignature'
 import { basename, formatBytes, previewText, relativeTime, formatImageDisplayName, calculateTextMetrics } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
-import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, ExternalLinkIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, QrCodeIcon, SparklesIcon, WandIcon, CheckIcon, ExportFileIcon } from './icons'
+import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, CheckIcon } from './icons'
 import { QuickMobileModal } from './QuickMobileModal'
 import { TransformModal } from './TransformModal'
 import { ItemExportModal } from './ItemExportModal'
+import { CardToolsMenu } from './CardToolsMenu'
 import { cleanUrl } from '../lib/cleanUrl'
 
 
@@ -824,89 +825,14 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           >
             <CopyIcon />
           </button>
-          {item.data.kind === 'text' && item.data.isUrl && (
-            <button
-              className="act"
-              title={t('flyout.openLink')}
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                e.currentTarget.blur()
-                playButtonClickSound()
-                window.open((item.data as any).text, '_blank')
-              }}
-            >
-              <ExternalLinkIcon />
-            </button>
-          )}
-          {cleanUrlResult?.hasTracking && (
-            <button
-              className="act"
-              title={`Copy clean link (strips ${cleanUrlResult.removedParams.length} tracking parameter${cleanUrlResult.removedParams.length > 1 ? 's' : ''}: ${cleanUrlResult.removedParams.join(', ')})`}
-              onClick={async (e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                e.currentTarget.blur()
-                playCopySuccessSound()
-                try {
-                  await navigator.clipboard.writeText(cleanUrlResult.cleanedUrl)
-                  useStore.getState().pushToast({
-                    id: `clean-url-${Date.now()}`,
-                    message: `Clean link copied (${cleanUrlResult.removedParams.length} tracker${cleanUrlResult.removedParams.length > 1 ? 's' : ''} removed)`,
-                    tone: 'info'
-                  })
-                } catch (err) {
-                  console.error('Failed to copy clean URL', err)
-                }
-              }}
-            >
-              <SparklesIcon width={12} height={12} />
-            </button>
-          )}
           {item.data.kind === 'text' && (
-            <button
-              className="act"
-              title={item.data.isUrl ? 'Mobile QR link transfer' : 'Scan text to phone'}
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                e.currentTarget.blur()
-                playButtonClickSound()
-                setShowQrModal(true)
-              }}
-            >
-              <QrCodeIcon width={12} height={12} />
-            </button>
-          )}
-          {item.data.kind === 'text' && (
-            <button
-              className="act"
-              title="Transform text & inspect hashes"
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                e.currentTarget.blur()
-                playButtonClickSound()
-                setShowTransformModal(true)
-              }}
-            >
-              <WandIcon width={12} height={12} />
-            </button>
-          )}
-          {item.data.kind === 'text' && (
-            <button
-              className="act"
-              title="Export item (Markdown, TXT, PDF)"
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                e.currentTarget.blur()
-                playButtonClickSound()
-                setShowExportModal(true)
-              }}
-            >
-              <ExportFileIcon width={12} height={12} />
-            </button>
+            <CardToolsMenu
+              item={item}
+              cleanUrlResult={cleanUrlResult}
+              onOpenQr={() => setShowQrModal(true)}
+              onOpenTransform={() => setShowTransformModal(true)}
+              onOpenExport={() => setShowExportModal(true)}
+            />
           )}
           <div className="act-divider" />
           <button

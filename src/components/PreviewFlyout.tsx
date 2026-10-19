@@ -3,7 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/appStore'
 import { formatBytes, formatImageDisplayName } from '../lib/format'
 import { getFileKind } from '../lib/fileType'
-import { FileKindIcon, FolderOpenIcon, CopyIcon, CheckIcon, ExternalLinkIcon, CloseIcon, GlobeIcon, EditIcon, SparklesIcon, DiffIcon } from './icons'
+import { FileKindIcon, FolderOpenIcon, CopyIcon, CheckIcon, ExternalLinkIcon, CloseIcon, GlobeIcon, EditIcon, SparklesIcon, DiffIcon, QrCodeIcon, ExportFileIcon, WandIcon } from './icons'
+import { QuickMobileModal } from './QuickMobileModal'
+import { TransformModal } from './TransformModal'
+import { ItemExportModal } from './ItemExportModal'
 import { parseUrlPreview } from '../lib/urlPreview'
 import { parseColor } from '../lib/colorUtils'
 import { detectCode } from '../lib/codeDetect'
@@ -544,12 +547,18 @@ function TextPreviewAndEditor({
   item,
   activeText,
   codeInfo,
-  onTextUpdated
+  onTextUpdated,
+  onOpenQr,
+  onOpenTransform,
+  onOpenExport
 }: {
   item: any
   activeText: string
   codeInfo: ReturnType<typeof detectCode>
   onTextUpdated: (newText: string) => void
+  onOpenQr?: () => void
+  onOpenTransform?: () => void
+  onOpenExport?: () => void
 }) {
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
@@ -654,6 +663,54 @@ function TextPreviewAndEditor({
         )}
 
         <div className="act-pill" style={{ position: 'relative' }} ref={menuRef}>
+          {onOpenQr && (
+            <button
+              type="button"
+              className="act"
+              title="Scan QR Code to mobile phone"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                playButtonClickSound()
+                onOpenQr()
+              }}
+            >
+              <QrCodeIcon width={13} height={13} />
+            </button>
+          )}
+
+          {onOpenExport && (
+            <button
+              type="button"
+              className="act"
+              title="Export item (Markdown, TXT, PDF)"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                playButtonClickSound()
+                onOpenExport()
+              }}
+            >
+              <ExportFileIcon width={13} height={13} />
+            </button>
+          )}
+
+          {onOpenTransform && (
+            <button
+              type="button"
+              className="act"
+              title="Inspect SHA-256, CRC32 & text transforms"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                playButtonClickSound()
+                onOpenTransform()
+              }}
+            >
+              <WandIcon width={13} height={13} />
+            </button>
+          )}
+
           <button
             type="button"
             className={`act${transformMenuOpen ? ' active' : ''}`}
@@ -839,6 +896,9 @@ function PreviewContent({
   const startDrag = useDragOut()
 
   const [fullText, setFullText] = useState<string | null>(null)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [showTransformModal, setShowTransformModal] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
 
   useEffect(() => {
     if (item?.data?.kind === 'text' && item.data.hasFullPayload) {
@@ -855,92 +915,134 @@ function PreviewContent({
     if (isUrl) {
       const info = parseUrlPreview(activeText)
       return (
-        <div
-          onClick={(e) => {
-            const sel = window.getSelection()?.toString()
-            if (sel && sel.trim().length > 0) return
-            e.stopPropagation()
-            tryPaste(() => useStore.getState().paste(item.id))
-          }}
-          title={t('flyout.clickToPaste')}
-          style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.14)',
-              borderRadius: 999,
-              padding: '3px 10px',
-              maxWidth: 'calc(100% - 75px)',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              boxSizing: 'border-box'
-            }}>
-              <GlobeIcon width={13} height={13} style={{ color: 'rgba(255, 255, 255, 0.85)', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#ffffff', fontFamily: SYS_FONT, flexShrink: 0, whiteSpace: 'nowrap' }}>{info.serviceName}</span>
-              <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.35)', flexShrink: 0 }}>·</span>
-              <span style={{ fontSize: 11.5, color: 'rgba(255, 255, 255, 0.65)', fontFamily: SYS_FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>{info.domain}</span>
-            </div>
-
-            <div className="act-pill">
-              <QuickActionButton
-                title={t('flyout.openLink')}
-                icon={ExternalLinkIcon}
-                onClick={() => window.open(activeText, '_blank')}
-              />
-              <QuickActionButton
-                title={t('flyout.copyText')}
-                icon={CopyIcon}
-                onClick={() => navigator.clipboard.writeText(info.cleanUrl || activeText)}
-              />
-            </div>
-          </div>
-
-          {info.title && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{
-                fontSize: 16,
-                fontWeight: 600,
-                color: '#ffffff',
-                lineHeight: 1.35,
-                fontFamily: SYS_FONT,
-                wordBreak: 'break-word'
-              }}>
-                {info.title}
-              </div>
-              {info.subtitle && (
-                <div>
-                  <span style={{
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    padding: '2px 7px',
-                    borderRadius: 4,
-                    display: 'inline-block'
-                  }}>
-                    {info.subtitle}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
+        <>
           <div
             onClick={(e) => {
+              const sel = window.getSelection()?.toString()
+              if (sel && sel.trim().length > 0) return
               e.stopPropagation()
-              window.open(activeText, '_blank')
+              tryPaste(() => useStore.getState().paste(item.id))
             }}
-            className="flyout-url"
+            title={t('flyout.clickToPaste')}
+            style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer' }}
           >
-            {info.cleanUrl || activeText}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                borderRadius: 999,
+                padding: '3px 10px',
+                maxWidth: 'calc(100% - 75px)',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box'
+              }}>
+                <GlobeIcon width={13} height={13} style={{ color: 'rgba(255, 255, 255, 0.85)', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#ffffff', fontFamily: SYS_FONT, flexShrink: 0, whiteSpace: 'nowrap' }}>{info.serviceName}</span>
+                <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.35)', flexShrink: 0 }}>·</span>
+                <span style={{ fontSize: 11.5, color: 'rgba(255, 255, 255, 0.65)', fontFamily: SYS_FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>{info.domain}</span>
+              </div>
+
+              <div className="act-pill">
+                <QuickActionButton
+                  title="Scan QR Code to mobile phone"
+                  icon={QrCodeIcon}
+                  onClick={() => setShowQrModal(true)}
+                />
+                <QuickActionButton
+                  title="Export item (Markdown, TXT, PDF)"
+                  icon={ExportFileIcon}
+                  onClick={() => setShowExportModal(true)}
+                />
+                <QuickActionButton
+                  title="Inspect transforms & hashes"
+                  icon={WandIcon}
+                  onClick={() => setShowTransformModal(true)}
+                />
+                <QuickActionButton
+                  title={t('flyout.openLink')}
+                  icon={ExternalLinkIcon}
+                  onClick={() => window.open(activeText, '_blank')}
+                />
+                <QuickActionButton
+                  title={t('flyout.copyText')}
+                  icon={CopyIcon}
+                  onClick={() => navigator.clipboard.writeText(info.cleanUrl || activeText)}
+                />
+              </div>
+            </div>
+
+            {info.title && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: '#ffffff',
+                  lineHeight: 1.35,
+                  fontFamily: SYS_FONT,
+                  wordBreak: 'break-word'
+                }}>
+                  {info.title}
+                </div>
+                {info.subtitle && (
+                  <div>
+                    <span style={{
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color: 'rgba(255, 255, 255, 0.6)',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      padding: '2px 7px',
+                      borderRadius: 4,
+                      display: 'inline-block'
+                    }}>
+                      {info.subtitle}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div
+              onClick={(e) => {
+                e.stopPropagation()
+                window.open(activeText, '_blank')
+              }}
+              className="flyout-url"
+            >
+              {info.cleanUrl || activeText}
+            </div>
           </div>
-        </div>
+
+          {showQrModal && (
+            <QuickMobileModal
+              text={activeText}
+              isUrl={true}
+              onClose={() => setShowQrModal(false)}
+            />
+          )}
+          {showTransformModal && (
+            <TransformModal
+              itemId={item.id}
+              text={activeText}
+              onClose={() => setShowTransformModal(false)}
+              onApplyText={(newText) => {
+                useStore.getState().updateText(item.id, newText)
+                setFullText(newText)
+              }}
+            />
+          )}
+          {showExportModal && (
+            <ItemExportModal
+              item={item}
+              onClose={() => setShowExportModal(false)}
+            />
+          )}
+        </>
       )
     }
 
@@ -995,12 +1097,41 @@ function PreviewContent({
 
     const codeInfo = detectCode(activeText)
     return (
-      <TextPreviewAndEditor
-        item={item}
-        activeText={activeText}
-        codeInfo={codeInfo}
-        onTextUpdated={(t) => setFullText(t)}
-      />
+      <>
+        <TextPreviewAndEditor
+          item={item}
+          activeText={activeText}
+          codeInfo={codeInfo}
+          onTextUpdated={(t) => setFullText(t)}
+          onOpenQr={() => setShowQrModal(true)}
+          onOpenTransform={() => setShowTransformModal(true)}
+          onOpenExport={() => setShowExportModal(true)}
+        />
+        {showQrModal && (
+          <QuickMobileModal
+            text={activeText}
+            isUrl={false}
+            onClose={() => setShowQrModal(false)}
+          />
+        )}
+        {showTransformModal && (
+          <TransformModal
+            itemId={item.id}
+            text={activeText}
+            onClose={() => setShowTransformModal(false)}
+            onApplyText={(newText) => {
+              useStore.getState().updateText(item.id, newText)
+              setFullText(newText)
+            }}
+          />
+        )}
+        {showExportModal && (
+          <ItemExportModal
+            item={item}
+            onClose={() => setShowExportModal(false)}
+          />
+        )}
+      </>
     )
   }
   

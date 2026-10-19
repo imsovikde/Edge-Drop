@@ -3284,3 +3284,64 @@
   display: inline-flex !important;
 }
 
+/* Floating Card Power Tools Flyout (Outside Card & Shelf) */
+.card-tools-flyout {
+  pointer-events: auto;
+  user-select: none;
+}
+
+.card-tools-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease, transform 0.1s ease;
+  color: #f4f4f5;
+  box-sizing: border-box;
+}
+
+.card-tools-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.card-tools-item:active {
+  transform: scale(0.98);
+}
+
+.card-tools-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.card-tools-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.card-tools-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #f4f4f5;
+  line-height: 1.25;
+}
+
+.card-tools-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.2;
+}
+
