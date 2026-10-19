@@ -314,13 +314,13 @@ class AuthManager {
   }
 
   public async checkEmailVerification(): Promise<{ verified: boolean; message: string }> {
+    if (!this.currentUser || this.currentUser.isAnonymous) {
+      return { verified: false, message: 'No registered user session found. Please sign in with email.' }
+    }
+
     const config = getActiveFirebaseConfig()
     if (!config?.apiKey) {
       return { verified: false, message: 'Firebase configuration is missing or invalid.' }
-    }
-
-    if (!this.currentUser || this.currentUser.isAnonymous) {
-      return { verified: false, message: 'No registered user session found. Please sign in with email.' }
     }
 
     const token = await this.getFreshIdToken()
@@ -390,14 +390,14 @@ class AuthManager {
   }
 
   public async sendPasswordResetEmail(targetEmail?: string): Promise<{ ok: boolean; message: string }> {
-    const config = getActiveFirebaseConfig()
-    if (!config?.apiKey) {
-      return { ok: false, message: 'Firebase configuration is missing or invalid.' }
-    }
-
     const emailToSend = (targetEmail || this.currentUser?.email || '').trim()
     if (!emailToSend || !emailToSend.includes('@')) {
       return { ok: false, message: 'Please provide a valid email address.' }
+    }
+
+    const config = getActiveFirebaseConfig()
+    if (!config?.apiKey) {
+      return { ok: false, message: 'Firebase configuration is missing or invalid.' }
     }
 
     try {
