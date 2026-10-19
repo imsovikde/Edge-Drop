@@ -30,7 +30,7 @@ const VIEW = 256 - TRIM * 2
 
 function uiIcon(name: PhosphorName, fallback = 16) {
   return (p: P) => {
-    const size = Number(p.width ?? p.height ?? fallback)
+    const size = Number(p.size ?? p.width ?? p.height ?? fallback)
     const { weight, ...rest } = p
     const fillPath = weight === 'fill' ? (PHOSPHOR_FILL as Record<string, string>)[name] : undefined
     // Extra outline (in grid units) so Bold's 24-unit line becomes linePx on screen.
