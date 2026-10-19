@@ -363,8 +363,17 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
               <span>+ {t('onboarding.dropToExtract')}</span>
             </div>
           )}
-          {/* Content — even bezels, no header chrome */}
-          <div style={{ padding: selectedKeys.size > 0 ? '20px 20px 68px 20px' : '20px', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none', flex: 1, minHeight: 0 }}>
+          {/* Content — even bezels, clean custom scrollbar */}
+          <div
+            className="edge-custom-scrollbar"
+            style={{
+              padding: selectedKeys.size > 0 ? '20px 20px 68px 20px' : '20px',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              flex: 1,
+              minHeight: 0
+            }}
+          >
             <PreviewContent
               item={item}
               selectedKeys={selectedKeys}
@@ -788,6 +797,15 @@ function TextPreviewAndEditor({
               onClick={() => useStore.getState().copy(item.id)}
             />
           )}
+
+          <QuickActionButton
+            title={t('header.close') || 'Close preview (Esc)'}
+            icon={CloseIcon}
+            onClick={() => {
+              playButtonClickSound()
+              useStore.getState().setPreviewItemId(null)
+            }}
+          />
         </div>
       </div>
 
@@ -972,6 +990,14 @@ function PreviewContent({
                   icon={CopyIcon}
                   onClick={() => navigator.clipboard.writeText(info.cleanUrl || activeText)}
                 />
+                <QuickActionButton
+                  title={t('header.close') || 'Close preview (Esc)'}
+                  icon={CloseIcon}
+                  onClick={() => {
+                    playButtonClickSound()
+                    useStore.getState().setPreviewItemId(null)
+                  }}
+                />
               </div>
             </div>
 
@@ -1076,9 +1102,17 @@ function PreviewContent({
           <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', position: 'absolute', top: 10, right: 10 }}>
             <div className="act-pill">
               <QuickActionButton
-              title={t('flyout.copyText')}
+                title={t('flyout.copyText')}
                 icon={CopyIcon}
                 onClick={() => useStore.getState().copy(item.id)}
+              />
+              <QuickActionButton
+                title={t('header.close') || 'Close preview (Esc)'}
+                icon={CloseIcon}
+                onClick={() => {
+                  playButtonClickSound()
+                  useStore.getState().setPreviewItemId(null)
+                }}
               />
             </div>
           </div>
@@ -1156,9 +1190,17 @@ function PreviewContent({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, position: 'absolute', top: 8, right: 8, zIndex: 2 }}>
           <div className="act-pill">
             <QuickActionButton
-            title={t('flyout.copyImage')}
+              title={t('flyout.copyImage')}
               icon={CopyIcon}
               onClick={() => useStore.getState().copy(item.id)}
+            />
+            <QuickActionButton
+              title={t('header.close') || 'Close preview (Esc)'}
+              icon={CloseIcon}
+              onClick={() => {
+                playButtonClickSound()
+                useStore.getState().setPreviewItemId(null)
+              }}
             />
           </div>
         </div>

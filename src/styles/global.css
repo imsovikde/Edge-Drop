@@ -79,22 +79,69 @@ svg {
   background-clip: padding-box;
 }
 
-/* All flyout preview containers hide visible scrollbars while maintaining scroll functionality */
-.preview-flyout,
-.preview-flyout *,
-.language-flyout,
-.language-flyout * {
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+/* Custom tactile scrollbar for modals, popups, and preview content */
+.edge-custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.preview-flyout::-webkit-scrollbar,
-.preview-flyout *::-webkit-scrollbar,
-.language-flyout::-webkit-scrollbar,
-.language-flyout *::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+.edge-custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: background-color 0.15s ease;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+/* Modal and flyout entrance/exit keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes scaleOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(6px);
+  }
 }
 
 img,

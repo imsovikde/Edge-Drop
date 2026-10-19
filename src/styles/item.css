@@ -3345,3 +3345,39 @@
   line-height: 1.2;
 }
 
+/* ------------------------------------------------------------------ */
+/* Modal Dialogs & Custom Tactile Scrollbar                          */
+/* ------------------------------------------------------------------ */
+
+.edge-custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: background-color 0.15s ease;
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.edge-custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+
