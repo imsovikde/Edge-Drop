@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { ClipboardItemDto } from '../../shared/types'
 import {
   exportSingleItem,
@@ -67,7 +68,7 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="item-export-modal-backdrop"
       onClick={() => {
@@ -457,6 +458,7 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
           <span>Zero-loss character preservation</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

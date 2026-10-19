@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import {
   TRANSFORMS,
   applyTransform,
@@ -100,7 +101,7 @@ export const TransformModal: React.FC<TransformModalProps> = ({
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="transform-modal-overlay"
       onClick={(e) => {
@@ -374,6 +375,7 @@ export const TransformModal: React.FC<TransformModalProps> = ({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

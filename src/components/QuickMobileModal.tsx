@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { generateQrSvg, generateQrDataUrl, selectQrVersion } from '../lib/qrCode'
 import { CloseIcon, CheckIcon, CopyIcon, QrCodeIcon } from './icons'
 import { playButtonClickSound, playCardExpandSound } from '../lib/soundEffects'
@@ -68,7 +69,7 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="quick-mobile-modal-overlay"
       onClick={(e) => {
@@ -259,6 +260,7 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
