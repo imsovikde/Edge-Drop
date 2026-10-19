@@ -89,6 +89,7 @@ interface AppState {
   setExpandedStackId: (id: string | null) => void
   /** True if the active drag originated from within the app itself. Stores the drag request (which item/sub-item). */
   internalDragReq: import('../../shared/types').DragRequest | null
+  setInternalDragReq: (req: import('../../shared/types').DragRequest | null) => void
   /** Active toasts (auto-dismissed after a short delay). */
   toasts: ToastMsg[]
   tutorialStep: number
@@ -147,8 +148,13 @@ interface AppState {
   firebaseUser: import('../../shared/types').FirebaseUserDto | null
   setFirebaseUser: (user: import('../../shared/types').FirebaseUserDto | null) => void
   setDragActive: (active: boolean) => void
-  setInternalDragReq: (req: import('../../shared/types').DragRequest | null) => void
-  setPreviewItemId: (id: string | null, rect?: { x?: number; y?: number; width?: number; height?: number }) => void
+  previewFlyoutTab: 'preview' | 'qr' | 'transform' | 'export'
+  setPreviewFlyoutTab: (tab: 'preview' | 'qr' | 'transform' | 'export') => void
+  setPreviewItemId: (
+    id: string | null,
+    rect?: { x?: number; y?: number; width?: number; height?: number },
+    tab?: 'preview' | 'qr' | 'transform' | 'export'
+  ) => void
   styleFlyoutOpen: boolean
   styleFlyoutAnchorRect: { x?: number; y?: number; width?: number; height?: number } | null
   setStyleFlyoutOpen: (open: boolean, rect?: { x?: number; y?: number; width?: number; height?: number } | null) => void
@@ -560,7 +566,7 @@ export const useStore = create<AppState>((set, get) => ({
       // NOTE: Do NOT reset styleFlyoutOpen here — closePanel() handles the
       // sequencing so the flyout exit animation completes before the panel closes.
       // Only reset previewItemId so the normal preview flyout clears correctly.
-      set({ previewItemId: null, previewItemRect: null, expandedStackId: null })
+      set({ previewItemId: null, previewItemRect: null, expandedStackId: null, previewFlyoutTab: 'preview' })
       edge.setPreviewMode(false)
     }
   },
@@ -571,6 +577,7 @@ export const useStore = create<AppState>((set, get) => ({
       previewItemId: null,
       previewItemRect: null,
       previewFlyoutRect: null,
+      previewFlyoutTab: 'preview',
       styleFlyoutOpen: false,
       styleFlyoutAnchorRect: null,
       languageFlyoutOpen: false,
@@ -590,8 +597,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
   previewFlyoutRect: null,
   setPreviewFlyoutRect: (rect) => set({ previewFlyoutRect: rect }),
-  setPreviewItemId: (id, rect) => {
-    set({ previewItemId: id, previewItemRect: rect || null, ...(id ? {} : { previewFlyoutRect: null }) })
+  previewFlyoutTab: 'preview',
+  setPreviewFlyoutTab: (tab) => set({ previewFlyoutTab: tab }),
+  setPreviewItemId: (id, rect, tab = 'preview') => {
+    set({
+      previewItemId: id,
+      previewItemRect: rect || null,
+      previewFlyoutTab: tab,
+      ...(id ? {} : { previewFlyoutRect: null, previewFlyoutTab: 'preview' })
+    })
     if (id) {
       edge.setPreviewMode(true)
     }

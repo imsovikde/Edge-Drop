@@ -34,22 +34,22 @@ describe('Card Tools & External Flyout Architecture', () => {
     expect(cardToolsMenu).toContain('Export Item')
   })
 
-  it('QuickMobileModal portals to document.body so QR code never blows up inside small cards', () => {
-    expect(qrModal).toContain("import { createPortal } from 'react-dom'")
-    expect(qrModal).toContain('createPortal(')
-    expect(qrModal).toContain('document.body')
+  it('QuickMobileModal is rendered inside PreviewFlyout with custom scrollbars and no screen blackout overlay', () => {
+    expect(qrModal).toContain('quick-mobile-modal-card')
+    expect(qrModal).toContain('edge-custom-scrollbar')
+    expect(qrModal).not.toContain('quick-mobile-modal-overlay')
   })
 
-  it('ItemExportModal portals to document.body so export dialog stays unconstrained', () => {
-    expect(exportModal).toContain("import { createPortal } from 'react-dom'")
-    expect(exportModal).toContain('createPortal(')
-    expect(exportModal).toContain('document.body')
+  it('ItemExportModal is rendered inside PreviewFlyout with custom scrollbars and no screen blackout overlay', () => {
+    expect(exportModal).toContain('item-export-modal')
+    expect(exportModal).toContain('edge-custom-scrollbar')
+    expect(exportModal).not.toContain('item-export-modal-backdrop')
   })
 
-  it('TransformModal portals to document.body so hash/transform modal stays unconstrained', () => {
-    expect(transformModal).toContain("import { createPortal } from 'react-dom'")
-    expect(transformModal).toContain('createPortal(')
-    expect(transformModal).toContain('document.body')
+  it('TransformModal is rendered inside PreviewFlyout with custom scrollbars and no screen blackout overlay', () => {
+    expect(transformModal).toContain('transform-modal-card')
+    expect(transformModal).toContain('edge-custom-scrollbar')
+    expect(transformModal).not.toContain('transform-modal-overlay')
   })
 
   it('PreviewFlyout provides external power actions outside the box for expanded items', () => {

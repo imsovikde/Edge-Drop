@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { generateQrSvg, generateQrDataUrl, selectQrVersion } from '../lib/qrCode'
 import { CloseIcon, CheckIcon, CopyIcon, QrCodeIcon } from './icons'
@@ -10,9 +9,10 @@ interface QuickMobileModalProps {
   text: string
   isUrl?: boolean
   onClose: () => void
+  onBack?: () => void
 }
 
-export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl, onClose }) => {
+export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl, onClose, onBack }) => {
   const { t } = useTranslation()
   const [copiedType, setCopiedType] = useState<'svg' | 'dataUrl' | null>(null)
   const [isClosing, setIsClosing] = useState(false)
@@ -32,12 +32,16 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        handleClose()
+        if (onBack) {
+          onBack()
+        } else {
+          handleClose()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleClose])
+  }, [handleClose, onBack])
 
   const bytes = useMemo(() => new TextEncoder().encode(text), [text])
   const versionInfo = useMemo(() => selectQrVersion(bytes.length), [bytes])
@@ -79,65 +83,63 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
     }
   }
 
-  return createPortal(
+  return (
     <motion.div
-      className="quick-mobile-modal-overlay"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: isClosing ? 0 : 1 }}
-      transition={{ duration: 0.18, ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1] }}
-      onPointerDown={(e) => {
-        if (e.target === e.currentTarget) {
-          e.stopPropagation()
-          handleClose()
-        }
+      className="quick-mobile-modal-card edge-custom-scrollbar"
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{
+        opacity: isClosing ? 0 : 1,
+        scale: isClosing ? 0.97 : 1,
+        y: isClosing ? 6 : 0
       }}
+      transition={{
+        duration: 0.2,
+        ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.72)',
-        backdropFilter: 'blur(10px)',
-        zIndex: 99999,
+        width: '100%',
+        overflowY: 'auto',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16
+        gap: 14,
+        color: '#e4e4e7',
+        boxSizing: 'border-box',
+        padding: '2px 0'
       }}
     >
-      <motion.div
-        className="quick-mobile-modal-card edge-custom-scrollbar"
-        initial={{ opacity: 0, scale: 0.93, y: 12 }}
-        animate={{
-          opacity: isClosing ? 0 : 1,
-          scale: isClosing ? 0.95 : 1,
-          y: isClosing ? 8 : 0
-        }}
-        transition={{
-          duration: 0.2,
-          ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: 340,
-          maxHeight: 'min(580px, 90vh)',
-          overflowY: 'auto',
-          background: 'linear-gradient(180deg, rgba(28, 28, 35, 0.98) 0%, rgba(18, 18, 23, 0.98) 100%)',
-          borderRadius: 16,
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(255, 255, 255, 0.08) inset',
-          padding: '18px 20px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 14,
-          color: '#e4e4e7',
-          boxSizing: 'border-box'
-        }}
-      >
-        {/* Header */}
-        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+      {/* Header */}
+      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {onBack && (
+            <button
+              type="button"
+              className="act"
+              title="Back to Preview"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onBack()
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: 6,
+                padding: '3px 8px',
+                fontSize: 11,
+                color: '#d4d4d8',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                marginRight: 2
+              }}
+            >
+              <span>← Back</span>
+            </button>
+          )}
             <span style={{ color: '#60a5fa', display: 'flex', alignItems: 'center' }}>
               <QrCodeIcon size={16} />
             </span>
@@ -298,7 +300,5 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
           </button>
         </div>
       </motion.div>
-    </motion.div>,
-    document.body
-  )
-}
+    )
+  }

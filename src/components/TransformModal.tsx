@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
   TRANSFORMS,
@@ -15,12 +14,14 @@ interface TransformModalProps {
   itemId: string
   text: string
   onClose: () => void
+  onBack?: () => void
   onApplyText?: (newText: string) => void
 }
 
 export const TransformModal: React.FC<TransformModalProps> = ({
   text,
   onClose,
+  onBack,
   onApplyText
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'case' | 'encoding' | 'json' | 'clean'>('all')
@@ -49,7 +50,11 @@ export const TransformModal: React.FC<TransformModalProps> = ({
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        handleClose()
+        if (onBack) {
+          onBack()
+        } else {
+          handleClose()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -57,7 +62,7 @@ export const TransformModal: React.FC<TransformModalProps> = ({
       mounted = false
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [text, handleClose])
+  }, [text, handleClose, onBack])
 
   const crc32 = useMemo(() => computeCrc32(text), [text])
 
@@ -111,69 +116,68 @@ export const TransformModal: React.FC<TransformModalProps> = ({
     }
   }
 
-  return createPortal(
+  return (
     <motion.div
-      className="transform-modal-overlay"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: isClosing ? 0 : 1 }}
-      transition={{ duration: 0.18, ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1] }}
-      onPointerDown={(e) => {
-        if (e.target === e.currentTarget) {
-          e.stopPropagation()
-          handleClose()
-        }
+      className="transform-modal-card"
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{
+        opacity: isClosing ? 0 : 1,
+        scale: isClosing ? 0.97 : 1,
+        y: isClosing ? 6 : 0
       }}
+      transition={{
+        duration: 0.2,
+        ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.76)',
-        backdropFilter: 'blur(12px)',
-        zIndex: 99999,
+        width: '100%',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16
+        flexDirection: 'column',
+        gap: 12,
+        color: '#e4e4e7',
+        boxSizing: 'border-box'
       }}
     >
-      <motion.div
-        className="transform-modal-card"
-        initial={{ opacity: 0, scale: 0.93, y: 12 }}
-        animate={{
-          opacity: isClosing ? 0 : 1,
-          scale: isClosing ? 0.95 : 1,
-          y: isClosing ? 8 : 0
-        }}
-        transition={{
-          duration: 0.2,
-          ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: 420,
-          maxHeight: 'min(640px, 85vh)',
-          background: 'linear-gradient(180deg, rgba(28, 28, 35, 0.98) 0%, rgba(18, 18, 23, 0.98) 100%)',
-          borderRadius: 16,
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(255, 255, 255, 0.08) inset',
-          padding: '16px 18px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          color: '#e4e4e7',
-          boxSizing: 'border-box'
-        }}
-      >
-        {/* Header */}
-        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ color: '#a78bfa', display: 'flex', alignItems: 'center' }}>
-              <WandIcon size={16} />
-            </span>
-            <span style={{ fontWeight: 600, fontSize: 13, letterSpacing: '0.01em', color: '#f4f4f5' }}>
-              Text Transforms & Hashes
-            </span>
+      {/* Header */}
+      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {onBack && (
+            <button
+              type="button"
+              className="act"
+              title="Back to Preview"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onBack()
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: 6,
+                width: 26,
+                height: 26,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#d4d4d8',
+                cursor: 'pointer',
+                marginRight: 2
+              }}
+            >
+              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+          )}
+          <span style={{ color: '#a78bfa', display: 'flex', alignItems: 'center' }}>
+            <WandIcon size={16} />
+          </span>
+          <span style={{ fontWeight: 600, fontSize: 13, letterSpacing: '0.01em', color: '#f4f4f5' }}>
+            Text Transforms & Hashes
+          </span>
             <span
               style={{
                 fontSize: 10,
@@ -415,7 +419,5 @@ export const TransformModal: React.FC<TransformModalProps> = ({
           })}
         </div>
       </motion.div>
-    </motion.div>,
-    document.body
-  )
-}
+    )
+  }

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import type { ClipboardItemDto } from '../../shared/types'
 import {
@@ -16,9 +15,10 @@ import { useStore } from '../store/appStore'
 interface ItemExportModalProps {
   item: ClipboardItemDto
   onClose: () => void
+  onBack?: () => void
 }
 
-export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose }) => {
+export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose, onBack }) => {
   const [downloadingFormat, setDownloadingFormat] = useState<'md' | 'txt' | 'pdf' | null>(null)
   const [isClosing, setIsClosing] = useState(false)
   const pushToast = useStore((s) => s.pushToast)
@@ -47,12 +47,16 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        handleClose()
+        if (onBack) {
+          onBack()
+        } else {
+          handleClose()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleClose])
+  }, [handleClose, onBack])
 
   const handleExport = async (format: 'md' | 'txt' | 'pdf') => {
     playCopySuccessSound()
@@ -78,86 +82,86 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
     }
   }
 
-  return createPortal(
+  return (
     <motion.div
-      className="item-export-modal-backdrop"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: isClosing ? 0 : 1 }}
-      transition={{ duration: 0.18, ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1] }}
-      onPointerDown={(e) => {
-        if (e.target === e.currentTarget) {
-          e.stopPropagation()
-          handleClose()
-        }
+      className="item-export-modal"
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{
+        opacity: isClosing ? 0 : 1,
+        scale: isClosing ? 0.97 : 1,
+        y: isClosing ? 6 : 0
       }}
+      transition={{
+        duration: 0.2,
+        ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 99999,
-        background: 'rgba(0, 0, 0, 0.72)',
-        backdropFilter: 'blur(10px)',
+        width: '100%',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16
+        flexDirection: 'column',
+        overflow: 'hidden',
+        color: '#f4f4f5',
+        fontFamily: 'inherit'
       }}
     >
-      <motion.div
-        className="item-export-modal"
-        initial={{ opacity: 0, scale: 0.93, y: 12 }}
-        animate={{
-          opacity: isClosing ? 0 : 1,
-          scale: isClosing ? 0.95 : 1,
-          y: isClosing ? 8 : 0
-        }}
-        transition={{
-          duration: 0.2,
-          ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
+      {/* Header */}
+      <div
         style={{
-          width: '100%',
-          maxWidth: 440,
-          maxHeight: 'min(640px, 90vh)',
-          background: 'rgba(20, 20, 24, 0.98)',
-          border: '1px solid rgba(255, 255, 255, 0.16)',
-          borderRadius: 18,
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 255, 255, 0.08) inset',
+          padding: '14px 16px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          color: '#f4f4f5',
-          fontFamily: 'inherit'
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'rgba(255, 255, 255, 0.02)'
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: '14px 16px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(255, 255, 255, 0.02)'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onBack && (
+            <button
+              type="button"
+              className="act"
+              title="Back to Preview"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onBack()
+              }}
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                background: 'rgba(99, 102, 241, 0.18)',
-                border: '1px solid rgba(99, 102, 241, 0.35)',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: 6,
+                width: 26,
+                height: 26,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#818cf8'
+                color: '#d4d4d8',
+                cursor: 'pointer',
+                marginRight: 2
               }}
             >
-              <ExportFileIcon size={15} />
-            </div>
+              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+          )}
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: 'rgba(99, 102, 241, 0.18)',
+              border: '1px solid rgba(99, 102, 241, 0.35)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#818cf8'
+            }}
+          >
+            <ExportFileIcon size={15} />
+          </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>Export Item</div>
               <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
@@ -510,7 +514,5 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
           <span>Zero-loss character preservation</span>
         </div>
       </motion.div>
-    </motion.div>,
-    document.body
-  )
-}
+    )
+  }

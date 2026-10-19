@@ -174,11 +174,11 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Do not intercept if a modal overlay is already active above the flyout
-        const hasOpenModal = document.querySelector(
-          '.quick-mobile-modal-overlay, .item-export-modal-backdrop, .transform-modal-overlay'
-        )
-        if (hasOpenModal) return
+        const currentTab = useStore.getState().previewFlyoutTab
+        if (currentTab && currentTab !== 'preview') {
+          // Active subview handles Escape to return to preview
+          return
+        }
 
         e.stopPropagation()
         e.preventDefault()
@@ -936,11 +936,10 @@ function PreviewContent({
 }) {
   const { t } = useTranslation()
   const startDrag = useDragOut()
+  const previewFlyoutTab = useStore((s) => s.previewFlyoutTab)
+  const setPreviewFlyoutTab = useStore((s) => s.setPreviewFlyoutTab)
 
   const [fullText, setFullText] = useState<string | null>(null)
-  const [showQrModal, setShowQrModal] = useState(false)
-  const [showTransformModal, setShowTransformModal] = useState(false)
-  const [showExportModal, setShowExportModal] = useState(false)
 
   useEffect(() => {
     if (item?.data?.kind === 'text' && item.data.hasFullPayload) {
@@ -950,6 +949,47 @@ function PreviewContent({
     }
   }, [item?.id, item?.data?.hasFullPayload])
 
+  // Subview 1: Export Modal View
+  if (previewFlyoutTab === 'export') {
+    return (
+      <ItemExportModal
+        item={item}
+        onClose={() => useStore.getState().setPreviewItemId(null)}
+        onBack={() => setPreviewFlyoutTab('preview')}
+      />
+    )
+  }
+
+  // Subview 2: QR Code View
+  if (previewFlyoutTab === 'qr' && item?.data?.kind === 'text') {
+    const activeText = fullText ?? item.data.text
+    return (
+      <QuickMobileModal
+        text={activeText}
+        isUrl={Boolean(item.data.isUrl)}
+        onClose={() => useStore.getState().setPreviewItemId(null)}
+        onBack={() => setPreviewFlyoutTab('preview')}
+      />
+    )
+  }
+
+  // Subview 3: Text Transforms & Hashes View
+  if (previewFlyoutTab === 'transform' && item?.data?.kind === 'text') {
+    const activeText = fullText ?? item.data.text
+    return (
+      <TransformModal
+        itemId={item.id}
+        text={activeText}
+        onClose={() => useStore.getState().setPreviewItemId(null)}
+        onBack={() => setPreviewFlyoutTab('preview')}
+        onApplyText={(newText) => {
+          useStore.getState().updateText(item.id, newText)
+          setFullText(newText)
+        }}
+      />
+    )
+  }
+
   if (item.data.kind === 'text') {
     const activeText = fullText ?? item.data.text
     const isUrl = item.data.isUrl
@@ -957,142 +997,115 @@ function PreviewContent({
     if (isUrl) {
       const info = parseUrlPreview(activeText)
       return (
-        <>
-          <div
-            onClick={(e) => {
-              const sel = window.getSelection()?.toString()
-              if (sel && sel.trim().length > 0) return
-              e.stopPropagation()
-              tryPaste(() => useStore.getState().paste(item.id))
-            }}
-            title={t('flyout.clickToPaste')}
-            style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.14)',
-                borderRadius: 999,
-                padding: '3px 10px',
-                maxWidth: 'calc(100% - 75px)',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                boxSizing: 'border-box'
-              }}>
-                <GlobeIcon width={13} height={13} style={{ color: 'rgba(255, 255, 255, 0.85)', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#ffffff', fontFamily: SYS_FONT, flexShrink: 0, whiteSpace: 'nowrap' }}>{info.serviceName}</span>
-                <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.35)', flexShrink: 0 }}>·</span>
-                <span style={{ fontSize: 11.5, color: 'rgba(255, 255, 255, 0.65)', fontFamily: SYS_FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>{info.domain}</span>
-              </div>
-
-              <div className="act-pill">
-                <QuickActionButton
-                  title="Scan QR Code to mobile phone"
-                  icon={QrCodeIcon}
-                  onClick={() => setShowQrModal(true)}
-                />
-                <QuickActionButton
-                  title="Export item (Markdown, TXT, PDF)"
-                  icon={ExportFileIcon}
-                  onClick={() => setShowExportModal(true)}
-                />
-                <QuickActionButton
-                  title="Inspect transforms & hashes"
-                  icon={WandIcon}
-                  onClick={() => setShowTransformModal(true)}
-                />
-                <QuickActionButton
-                  title={t('flyout.openLink')}
-                  icon={ExternalLinkIcon}
-                  onClick={() => window.open(activeText, '_blank')}
-                />
-                <QuickActionButton
-                  title={t('flyout.copyText')}
-                  icon={CopyIcon}
-                  onClick={() => navigator.clipboard.writeText(info.cleanUrl || activeText)}
-                />
-                <QuickActionButton
-                  title={t('header.close') || 'Close preview (Esc)'}
-                  icon={CloseIcon}
-                  onClick={() => {
-                    playButtonClickSound()
-                    useStore.getState().setPreviewItemId(null)
-                  }}
-                />
-              </div>
+        <div
+          onClick={(e) => {
+            const sel = window.getSelection()?.toString()
+            if (sel && sel.trim().length > 0) return
+            e.stopPropagation()
+            tryPaste(() => useStore.getState().paste(item.id))
+          }}
+          title={t('flyout.clickToPaste')}
+          style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.14)',
+              borderRadius: 999,
+              padding: '3px 10px',
+              maxWidth: 'calc(100% - 75px)',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box'
+            }}>
+              <GlobeIcon width={13} height={13} style={{ color: 'rgba(255, 255, 255, 0.85)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#ffffff', fontFamily: SYS_FONT, flexShrink: 0, whiteSpace: 'nowrap' }}>{info.serviceName}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.35)', flexShrink: 0 }}>·</span>
+              <span style={{ fontSize: 11.5, color: 'rgba(255, 255, 255, 0.65)', fontFamily: SYS_FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>{info.domain}</span>
             </div>
 
-            {info.title && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{
-                  fontSize: 16,
-                  fontWeight: 600,
-                  color: '#ffffff',
-                  lineHeight: 1.35,
-                  fontFamily: SYS_FONT,
-                  wordBreak: 'break-word'
-                }}>
-                  {info.title}
-                </div>
-                {info.subtitle && (
-                  <div>
-                    <span style={{
-                      fontSize: 10.5,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      padding: '2px 7px',
-                      borderRadius: 4,
-                      display: 'inline-block'
-                    }}>
-                      {info.subtitle}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div
-              onClick={(e) => {
-                e.stopPropagation()
-                window.open(activeText, '_blank')
-              }}
-              className="flyout-url"
-            >
-              {info.cleanUrl || activeText}
+            <div className="act-pill">
+              <QuickActionButton
+                title="Scan QR Code to mobile phone"
+                icon={QrCodeIcon}
+                onClick={() => setPreviewFlyoutTab('qr')}
+              />
+              <QuickActionButton
+                title="Export item (Markdown, TXT, PDF)"
+                icon={ExportFileIcon}
+                onClick={() => setPreviewFlyoutTab('export')}
+              />
+              <QuickActionButton
+                title="Inspect transforms & hashes"
+                icon={WandIcon}
+                onClick={() => setPreviewFlyoutTab('transform')}
+              />
+              <QuickActionButton
+                title={t('flyout.openLink')}
+                icon={ExternalLinkIcon}
+                onClick={() => window.open(activeText, '_blank')}
+              />
+              <QuickActionButton
+                title={t('flyout.copyText')}
+                icon={CopyIcon}
+                onClick={() => navigator.clipboard.writeText(info.cleanUrl || activeText)}
+              />
+              <QuickActionButton
+                title={t('header.close') || 'Close preview (Esc)'}
+                icon={CloseIcon}
+                onClick={() => {
+                  playButtonClickSound()
+                  useStore.getState().setPreviewItemId(null)
+                }}
+              />
             </div>
           </div>
 
-          {showQrModal && (
-            <QuickMobileModal
-              text={activeText}
-              isUrl={true}
-              onClose={() => setShowQrModal(false)}
-            />
+          {info.title && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{
+                fontSize: 16,
+                fontWeight: 600,
+                color: '#ffffff',
+                lineHeight: 1.35,
+                fontFamily: SYS_FONT,
+                wordBreak: 'break-word'
+              }}>
+                {info.title}
+              </div>
+              {info.subtitle && (
+                <div>
+                  <span style={{
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    padding: '2px 7px',
+                    borderRadius: 4,
+                    display: 'inline-block'
+                  }}>
+                    {info.subtitle}
+                  </span>
+                </div>
+              )}
+            </div>
           )}
-          {showTransformModal && (
-            <TransformModal
-              itemId={item.id}
-              text={activeText}
-              onClose={() => setShowTransformModal(false)}
-              onApplyText={(newText) => {
-                useStore.getState().updateText(item.id, newText)
-                setFullText(newText)
-              }}
-            />
-          )}
-          {showExportModal && (
-            <ItemExportModal
-              item={item}
-              onClose={() => setShowExportModal(false)}
-            />
-          )}
-        </>
+
+          <div
+            onClick={(e) => {
+              e.stopPropagation()
+              window.open(activeText, '_blank')
+            }}
+            className="flyout-url"
+          >
+            {info.cleanUrl || activeText}
+          </div>
+        </div>
       )
     }
 
@@ -1155,41 +1168,15 @@ function PreviewContent({
 
     const codeInfo = detectCode(activeText)
     return (
-      <>
-        <TextPreviewAndEditor
-          item={item}
-          activeText={activeText}
-          codeInfo={codeInfo}
-          onTextUpdated={(t) => setFullText(t)}
-          onOpenQr={() => setShowQrModal(true)}
-          onOpenTransform={() => setShowTransformModal(true)}
-          onOpenExport={() => setShowExportModal(true)}
-        />
-        {showQrModal && (
-          <QuickMobileModal
-            text={activeText}
-            isUrl={false}
-            onClose={() => setShowQrModal(false)}
-          />
-        )}
-        {showTransformModal && (
-          <TransformModal
-            itemId={item.id}
-            text={activeText}
-            onClose={() => setShowTransformModal(false)}
-            onApplyText={(newText) => {
-              useStore.getState().updateText(item.id, newText)
-              setFullText(newText)
-            }}
-          />
-        )}
-        {showExportModal && (
-          <ItemExportModal
-            item={item}
-            onClose={() => setShowExportModal(false)}
-          />
-        )}
-      </>
+      <TextPreviewAndEditor
+        item={item}
+        activeText={activeText}
+        codeInfo={codeInfo}
+        onTextUpdated={(t) => setFullText(t)}
+        onOpenQr={() => setPreviewFlyoutTab('qr')}
+        onOpenTransform={() => setPreviewFlyoutTab('transform')}
+        onOpenExport={() => setPreviewFlyoutTab('export')}
+      />
     )
   }
   

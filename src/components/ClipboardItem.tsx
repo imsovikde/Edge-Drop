@@ -26,9 +26,6 @@ import { basename, formatBytes, previewText, relativeTime, formatImageDisplayNam
 import { getFileKind } from '../lib/fileType'
 import { playButtonClickSound, playToggleSound, playDeleteSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
 import { CopyIcon, FileKindIcon, FileStackPhoto, PinIcon, PinFillIcon, TrashIcon, MinusIcon, ChevronUpIcon, ChevronLeftIcon, ExpandIcon, ContractIcon, TagIcon, ShieldIcon, EyeIcon, EyeSlashIcon, CheckIcon } from './icons'
-import { QuickMobileModal } from './QuickMobileModal'
-import { TransformModal } from './TransformModal'
-import { ItemExportModal } from './ItemExportModal'
 import { CardToolsMenu } from './CardToolsMenu'
 import { cleanUrl } from '../lib/cleanUrl'
 
@@ -234,9 +231,7 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
   const adaptiveSpring = useAdaptiveSpring()
   const [copied, setCopied] = useState(false)
   const [revealed, setRevealed] = useState(false)
-  const [showQrModal, setShowQrModal] = useState(false)
-  const [showTransformModal, setShowTransformModal] = useState(false)
-  const [showExportModal, setShowExportModal] = useState(false)
+
   const isSelectedInBatch = useStore((s) => s.selectedItemIds.includes(item.id))
   const isSelectionMode = useStore((s) => s.isSelectionMode)
 
@@ -829,9 +824,9 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
             <CardToolsMenu
               item={item}
               cleanUrlResult={cleanUrlResult}
-              onOpenQr={() => setShowQrModal(true)}
-              onOpenTransform={() => setShowTransformModal(true)}
-              onOpenExport={() => setShowExportModal(true)}
+              onOpenQr={() => useStore.getState().setPreviewItemId(item.id, undefined, 'qr')}
+              onOpenTransform={() => useStore.getState().setPreviewItemId(item.id, undefined, 'transform')}
+              onOpenExport={() => useStore.getState().setPreviewItemId(item.id, undefined, 'export')}
             />
           )}
           <div className="act-divider" />
@@ -850,29 +845,6 @@ const ClipboardItemBase = forwardRef<HTMLDivElement, Props>(({ item, index, isSe
           </button>
         </div>
       </div>
-      {showQrModal && item.data.kind === 'text' && (
-        <QuickMobileModal
-          text={item.data.text}
-          isUrl={Boolean(item.data.isUrl)}
-          onClose={() => setShowQrModal(false)}
-        />
-      )}
-      {showTransformModal && item.data.kind === 'text' && (
-        <TransformModal
-          itemId={item.id}
-          text={item.data.text}
-          onClose={() => setShowTransformModal(false)}
-          onApplyText={(newText) => {
-            useStore.getState().updateText(item.id, newText)
-          }}
-        />
-      )}
-      {showExportModal && item.data.kind === 'text' && (
-        <ItemExportModal
-          item={item}
-          onClose={() => setShowExportModal(false)}
-        />
-      )}
     </motion.div>
   )
 })
