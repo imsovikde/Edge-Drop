@@ -227,11 +227,9 @@ function main() {
   }
 
   const notes = [
-    `# Edge-Drop v${version} — Autonomous Cloud Vault, Adaptive Synchronization & Zero-Resource Performance`,
+    `# Edge-Drop v${version} — Spotless File Export, Docked Flyout Architecture & Tactile Motion Ergonomics`,
     '',
-    'Edge-Drop is an ultra-fast clipboard manager that docks seamlessly on your display with authentic spring physics. Version ' +
-      version +
-      ' introduces enterprise-grade Two-Phase Commit (2PC) synchronization, OS kernel priority background offloading, sliding-window coalescing, cryptographic envelope encryption, and 1-click offline `.edvault` snapshot restoration.',
+    `Edge-Drop is an ultra-fast clipboard manager that docks seamlessly on your display with authentic spring physics. Version ${version} introduces spotless multi-format file export (Markdown, Plain Text, ISO 32000-1 PDF), docked PreviewFlyout sub-view architecture for QR mobile transfer, text transforms, and file export (eliminating desktop blackout overlays), custom draggable scrollbars, and tactile hierarchical Escape navigation.`,
     '',
     ...sections,
     table,
