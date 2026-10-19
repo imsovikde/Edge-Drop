@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { motion } from 'framer-motion'
 import { generateQrSvg, generateQrDataUrl, selectQrVersion } from '../lib/qrCode'
 import { CloseIcon, CheckIcon, CopyIcon, QrCodeIcon } from './icons'
 import { playButtonClickSound, playCardExpandSound } from '../lib/soundEffects'
@@ -14,6 +15,16 @@ interface QuickMobileModalProps {
 export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl, onClose }) => {
   const { t } = useTranslation()
   const [copiedType, setCopiedType] = useState<'svg' | 'dataUrl' | null>(null)
+  const [isClosing, setIsClosing] = useState(false)
+
+  const handleClose = useCallback(() => {
+    if (isClosing) return
+    setIsClosing(true)
+    playCardExpandSound(false)
+    setTimeout(() => {
+      onClose()
+    }, 180)
+  }, [isClosing, onClose])
 
   useEffect(() => {
     playCardExpandSound(true)
@@ -21,13 +32,12 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        playCardExpandSound(false)
-        onClose()
+        handleClose()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  }, [handleClose])
 
   const bytes = useMemo(() => new TextEncoder().encode(text), [text])
   const versionInfo = useMemo(() => selectQrVersion(bytes.length), [bytes])
@@ -70,12 +80,15 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
   }
 
   return createPortal(
-    <div
+    <motion.div
       className="quick-mobile-modal-overlay"
-      onClick={(e) => {
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isClosing ? 0 : 1 }}
+      transition={{ duration: 0.18, ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1] }}
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
-          playCardExpandSound(false)
-          onClose()
+          e.stopPropagation()
+          handleClose()
         }
       }}
       style={{
@@ -87,16 +100,28 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
-        animation: 'fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1)'
+        padding: 16
       }}
     >
-      <div
-        className="quick-mobile-modal-card"
+      <motion.div
+        className="quick-mobile-modal-card edge-custom-scrollbar"
+        initial={{ opacity: 0, scale: 0.93, y: 12 }}
+        animate={{
+          opacity: isClosing ? 0 : 1,
+          scale: isClosing ? 0.95 : 1,
+          y: isClosing ? 8 : 0
+        }}
+        transition={{
+          duration: 0.2,
+          ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: 340,
+          maxHeight: 'min(580px, 90vh)',
+          overflowY: 'auto',
           background: 'linear-gradient(180deg, rgba(28, 28, 35, 0.98) 0%, rgba(18, 18, 23, 0.98) 100%)',
           borderRadius: 16,
           border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -136,26 +161,39 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
 
           <button
             type="button"
-            className="act"
-            onClick={() => {
-              playCardExpandSound(false)
-              onClose()
+            aria-label="Close dialog"
+            title={t('header.close') || 'Close (Esc)'}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleClose()
             }}
-            title={t('header.close') || 'Close'}
             style={{
-              background: 'rgba(255, 255, 255, 0.06)',
-              border: 'none',
-              borderRadius: 6,
-              padding: 4,
-              color: '#a1a1aa',
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              color: '#d4d4d8',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.15s ease'
+              padding: 0,
+              transition: 'all 0.15s ease',
+              flexShrink: 0
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)'
+              e.currentTarget.style.color = '#ffffff'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.color = '#d4d4d8'
             }}
           >
-            <CloseIcon width={14} height={14} />
+            <CloseIcon width={14} height={14} style={{ pointerEvents: 'none' }} />
           </button>
         </div>
 
@@ -259,8 +297,8 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
             <span>{copiedType === 'dataUrl' ? 'Copied Data' : 'Data URL'}</span>
           </button>
         </div>
-      </div>
-    </div>,
+      </motion.div>
+    </motion.div>,
     document.body
   )
 }

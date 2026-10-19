@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { motion } from 'framer-motion'
 import type { ClipboardItemDto } from '../../shared/types'
 import {
   exportSingleItem,
@@ -9,7 +10,7 @@ import {
 import { calculateTextMetrics } from '../lib/format'
 import { detectCode } from '../lib/codeDetect'
 import { CloseIcon, CheckIcon, ExportFileIcon } from './icons'
-import { playButtonClickSound, playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
+import { playCardExpandSound, playCopySuccessSound } from '../lib/soundEffects'
 import { useStore } from '../store/appStore'
 
 interface ItemExportModalProps {
@@ -19,6 +20,7 @@ interface ItemExportModalProps {
 
 export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose }) => {
   const [downloadingFormat, setDownloadingFormat] = useState<'md' | 'txt' | 'pdf' | null>(null)
+  const [isClosing, setIsClosing] = useState(false)
   const pushToast = useStore((s) => s.pushToast)
 
   const rawText = getItemRawText(item)
@@ -30,19 +32,27 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
   const txtFilename = generateExportFilename(item, 'txt')
   const pdfFilename = generateExportFilename(item, 'pdf')
 
+  const handleClose = useCallback(() => {
+    if (isClosing) return
+    setIsClosing(true)
+    playCardExpandSound(false)
+    setTimeout(() => {
+      onClose()
+    }, 180)
+  }, [isClosing, onClose])
+
   useEffect(() => {
     playCardExpandSound(true)
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        playCardExpandSound(false)
-        onClose()
+        handleClose()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  }, [handleClose])
 
   const handleExport = async (format: 'md' | 'txt' | 'pdf') => {
     playCopySuccessSound()
@@ -69,16 +79,21 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
   }
 
   return createPortal(
-    <div
+    <motion.div
       className="item-export-modal-backdrop"
-      onClick={() => {
-        playCardExpandSound(false)
-        onClose()
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isClosing ? 0 : 1 }}
+      transition={{ duration: 0.18, ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1] }}
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) {
+          e.stopPropagation()
+          handleClose()
+        }
       }}
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 99999,
         background: 'rgba(0, 0, 0, 0.72)',
         backdropFilter: 'blur(10px)',
         display: 'flex',
@@ -87,12 +102,24 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
         padding: 16
       }}
     >
-      <div
+      <motion.div
         className="item-export-modal"
+        initial={{ opacity: 0, scale: 0.93, y: 12 }}
+        animate={{
+          opacity: isClosing ? 0 : 1,
+          scale: isClosing ? 0.95 : 1,
+          y: isClosing ? 8 : 0
+        }}
+        transition={{
+          duration: 0.2,
+          ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: 440,
+          maxHeight: 'min(640px, 90vh)',
           background: 'rgba(20, 20, 24, 0.98)',
           border: '1px solid rgba(255, 255, 255, 0.16)',
           borderRadius: 18,
@@ -101,8 +128,7 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
           flexDirection: 'column',
           overflow: 'hidden',
           color: '#f4f4f5',
-          fontFamily: 'inherit',
-          animation: 'scaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1)'
+          fontFamily: 'inherit'
         }}
       >
         {/* Header */}
@@ -141,23 +167,39 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
           </div>
           <button
             type="button"
-            onClick={() => {
-              playButtonClickSound()
-              onClose()
+            aria-label="Close dialog"
+            title="Close (Esc)"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleClose()
             }}
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'rgba(255, 255, 255, 0.55)',
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              color: '#d4d4d8',
               cursor: 'pointer',
-              padding: 4,
-              borderRadius: 6,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              padding: 0,
+              transition: 'all 0.15s ease',
+              flexShrink: 0
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)'
+              e.currentTarget.style.color = '#ffffff'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.color = '#d4d4d8'
             }}
           >
-            <CloseIcon size={14} />
+            <CloseIcon width={14} height={14} style={{ pointerEvents: 'none' }} />
           </button>
         </div>
 
@@ -205,7 +247,17 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
         </div>
 
         {/* Format Selection Cards */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div
+          className="edge-custom-scrollbar"
+          style={{
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            overflowY: 'auto',
+            maxHeight: 'min(420px, 55vh)'
+          }}
+        >
           {/* Option 1: Markdown */}
           <div
             style={{
@@ -457,8 +509,8 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose 
           <span>Press ESC to exit</span>
           <span>Zero-loss character preservation</span>
         </div>
-      </div>
-    </div>,
+      </motion.div>
+    </motion.div>,
     document.body
   )
 }

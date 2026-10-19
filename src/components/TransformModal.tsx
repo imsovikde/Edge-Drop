@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { motion } from 'framer-motion'
 import {
   TRANSFORMS,
   applyTransform,
@@ -26,6 +27,16 @@ export const TransformModal: React.FC<TransformModalProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedHash, setCopiedHash] = useState(false)
   const [sha256, setSha256] = useState<string>('')
+  const [isClosing, setIsClosing] = useState(false)
+
+  const handleClose = useCallback(() => {
+    if (isClosing) return
+    setIsClosing(true)
+    playCardExpandSound(false)
+    setTimeout(() => {
+      onClose()
+    }, 180)
+  }, [isClosing, onClose])
 
   useEffect(() => {
     playCardExpandSound(true)
@@ -38,8 +49,7 @@ export const TransformModal: React.FC<TransformModalProps> = ({
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        playCardExpandSound(false)
-        onClose()
+        handleClose()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -47,7 +57,7 @@ export const TransformModal: React.FC<TransformModalProps> = ({
       mounted = false
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [text, onClose])
+  }, [text, handleClose])
 
   const crc32 = useMemo(() => computeCrc32(text), [text])
 
@@ -102,12 +112,15 @@ export const TransformModal: React.FC<TransformModalProps> = ({
   }
 
   return createPortal(
-    <div
+    <motion.div
       className="transform-modal-overlay"
-      onClick={(e) => {
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isClosing ? 0 : 1 }}
+      transition={{ duration: 0.18, ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1] }}
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
-          playCardExpandSound(false)
-          onClose()
+          e.stopPropagation()
+          handleClose()
         }
       }}
       style={{
@@ -119,17 +132,27 @@ export const TransformModal: React.FC<TransformModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
-        animation: 'fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1)'
+        padding: 16
       }}
     >
-      <div
+      <motion.div
         className="transform-modal-card"
+        initial={{ opacity: 0, scale: 0.93, y: 12 }}
+        animate={{
+          opacity: isClosing ? 0 : 1,
+          scale: isClosing ? 0.95 : 1,
+          y: isClosing ? 8 : 0
+        }}
+        transition={{
+          duration: 0.2,
+          ease: isClosing ? [0.3, 0, 0.2, 1] : [0.16, 1, 0.3, 1]
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: 420,
-          maxHeight: '85vh',
+          maxHeight: 'min(640px, 85vh)',
           background: 'linear-gradient(180deg, rgba(28, 28, 35, 0.98) 0%, rgba(18, 18, 23, 0.98) 100%)',
           borderRadius: 16,
           border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -167,23 +190,39 @@ export const TransformModal: React.FC<TransformModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => {
-              playCardExpandSound(false)
-              onClose()
+            aria-label="Close dialog"
+            title="Close (Esc)"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleClose()
             }}
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#a1a1aa',
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              color: '#d4d4d8',
               cursor: 'pointer',
-              padding: 4,
-              borderRadius: 6,
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              transition: 'all 0.15s ease',
+              flexShrink: 0
             }}
-            title="Close (Esc)"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)'
+              e.currentTarget.style.color = '#ffffff'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.color = '#d4d4d8'
+            }}
           >
-            <CloseIcon size={14} />
+            <CloseIcon width={14} height={14} style={{ pointerEvents: 'none' }} />
           </button>
         </div>
 
@@ -278,14 +317,15 @@ export const TransformModal: React.FC<TransformModalProps> = ({
 
         {/* Scrollable Transform List */}
         <div
+          className="edge-custom-scrollbar"
           style={{
             width: '100%',
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
-            maxHeight: 320,
-            paddingRight: 2
+            maxHeight: 340,
+            paddingRight: 4
           }}
         >
           {filteredTransforms.map((t) => {
@@ -374,8 +414,8 @@ export const TransformModal: React.FC<TransformModalProps> = ({
             )
           })}
         </div>
-      </div>
-    </div>,
+      </motion.div>
+    </motion.div>,
     document.body
   )
 }
