@@ -70,6 +70,32 @@ const flyoutVariants = {
   reducedShown: { opacity: 1 },
 }
 
+const flyoutTabVariants = {
+  initial: (dir: number) => ({
+    opacity: 0,
+    x: dir > 0 ? 12 : -12,
+    scale: 0.985,
+  }),
+  animate: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    transition: {
+      duration: 0.2,
+      ease: [0.16, 1, 0.3, 1],
+    },
+  },
+  exit: (dir: number) => ({
+    opacity: 0,
+    x: dir > 0 ? -10 : 10,
+    scale: 0.985,
+    transition: {
+      duration: 0.15,
+      ease: [0.3, 0, 0.2, 1],
+    },
+  }),
+}
+
 export function PreviewFlyout({ isRight }: { isRight: boolean }) {
   const { t } = useTranslation()
   const previewItemId = useStore((s) => s.previewItemId)
@@ -78,6 +104,20 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
   const adaptiveSpring = useAdaptiveSpring()
   
   const item = previewItemId ? items.find((i) => i.id === previewItemId) : null
+  const previewFlyoutTab = useStore((s) => s.previewFlyoutTab)
+  const setPreviewFlyoutTab = useStore((s) => s.setPreviewFlyoutTab)
+
+  const [fullText, setFullText] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (item && item.data.kind === 'text' && item.data.hasFullPayload) {
+      window.edge.getFullText(item.id).then((t) => setFullText(t)).catch(() => {})
+    } else {
+      setFullText(null)
+    }
+  }, [item?.id, item?.data?.kind === 'text' ? item.data.hasFullPayload : false])
+
+  const activeText = fullText ?? (item && item.data.kind === 'text' ? item.data.text : '')
 
   const stickPosition = (settings.stickPosition || (isRight ? 'right' : 'left')) as 'left' | 'right' | 'top'
   const isTop = stickPosition === 'top'
@@ -380,23 +420,130 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
               <span>+ {t('onboarding.dropToExtract')}</span>
             </div>
           )}
-          {/* Content — even bezels, clean custom scrollbar */}
-          <div
-            className="edge-custom-scrollbar"
-            style={{
-              padding: selectedKeys.size > 0 ? '20px 20px 68px 20px' : '20px',
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              flex: 1,
-              minHeight: 0
-            }}
-          >
-            <PreviewContent
-              item={item}
-              selectedKeys={selectedKeys}
-              onToggleSelectKey={toggleSelectKey}
-            />
-          </div>
+          {/* Main Flyout View / Subviews with smooth Framer Motion transitions */}
+          <AnimatePresence mode="wait">
+            {previewFlyoutTab === 'export' ? (
+              <motion.div
+                key="export-tab"
+                custom={1}
+                variants={flyoutTabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                style={{
+                  width: '100%',
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
+                }}
+              >
+                <ItemExportModal
+                  item={item}
+                  onClose={() => {
+                    playButtonClickSound()
+                    useStore.getState().setPreviewItemId(null)
+                  }}
+                  onBack={() => {
+                    playButtonClickSound()
+                    setPreviewFlyoutTab('preview')
+                  }}
+                />
+              </motion.div>
+            ) : previewFlyoutTab === 'qr' && item?.data?.kind === 'text' ? (
+              <motion.div
+                key="qr-tab"
+                custom={1}
+                variants={flyoutTabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                style={{
+                  width: '100%',
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  padding: '16px 20px'
+                }}
+              >
+                <QuickMobileModal
+                  text={activeText}
+                  isUrl={Boolean(item.data.isUrl)}
+                  onClose={() => {
+                    playButtonClickSound()
+                    useStore.getState().setPreviewItemId(null)
+                  }}
+                  onBack={() => {
+                    playButtonClickSound()
+                    setPreviewFlyoutTab('preview')
+                  }}
+                />
+              </motion.div>
+            ) : previewFlyoutTab === 'transform' && item?.data?.kind === 'text' ? (
+              <motion.div
+                key="transform-tab"
+                custom={1}
+                variants={flyoutTabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                style={{
+                  width: '100%',
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  padding: '16px 20px'
+                }}
+              >
+                <TransformModal
+                  itemId={item.id}
+                  text={activeText}
+                  onClose={() => {
+                    playButtonClickSound()
+                    useStore.getState().setPreviewItemId(null)
+                  }}
+                  onBack={() => {
+                    playButtonClickSound()
+                    setPreviewFlyoutTab('preview')
+                  }}
+                  onApplyText={(newText) => {
+                    useStore.getState().updateText(item.id, newText)
+                    setFullText(newText)
+                  }}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="preview-tab"
+                custom={-1}
+                variants={flyoutTabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="edge-custom-scrollbar"
+                style={{
+                  padding: selectedKeys.size > 0 ? '20px 20px 68px 20px' : '20px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                <PreviewContent
+                  item={item}
+                  selectedKeys={selectedKeys}
+                  onToggleSelectKey={toggleSelectKey}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Floating Multi-Selection Batch Action Bar */}
           <AnimatePresence>
@@ -942,12 +1089,12 @@ function PreviewContent({
   const [fullText, setFullText] = useState<string | null>(null)
 
   useEffect(() => {
-    if (item?.data?.kind === 'text' && item.data.hasFullPayload) {
+    if (item && item.data.kind === 'text' && item.data.hasFullPayload) {
       window.edge.getFullText(item.id).then((t) => setFullText(t)).catch(() => {})
     } else {
       setFullText(null)
     }
-  }, [item?.id, item?.data?.hasFullPayload])
+  }, [item?.id, item?.data?.kind === 'text' ? item.data.hasFullPayload : false])
 
   // Subview 1: Export Modal View
   if (previewFlyoutTab === 'export') {

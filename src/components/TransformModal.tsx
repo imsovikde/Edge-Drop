@@ -36,7 +36,7 @@ export const TransformModal: React.FC<TransformModalProps> = ({
     playCardExpandSound(false)
     setTimeout(() => {
       onClose()
-    }, 180)
+    }, 50)
   }, [isClosing, onClose])
 
   useEffect(() => {
@@ -329,7 +329,8 @@ export const TransformModal: React.FC<TransformModalProps> = ({
             flexDirection: 'column',
             gap: 6,
             maxHeight: 340,
-            paddingRight: 4
+            paddingRight: 4,
+            overscrollBehavior: 'contain'
           }}
         >
           {filteredTransforms.map((t) => {

@@ -23,7 +23,7 @@ export const QuickMobileModal: React.FC<QuickMobileModalProps> = ({ text, isUrl,
     playCardExpandSound(false)
     setTimeout(() => {
       onClose()
-    }, 180)
+    }, 50)
   }, [isClosing, onClose])
 
   useEffect(() => {

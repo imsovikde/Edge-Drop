@@ -38,7 +38,7 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose,
     playCardExpandSound(false)
     setTimeout(() => {
       onClose()
-    }, 180)
+    }, 50)
   }, [isClosing, onClose])
 
   useEffect(() => {
@@ -259,7 +259,8 @@ export const ItemExportModal: React.FC<ItemExportModalProps> = ({ item, onClose,
             flexDirection: 'column',
             gap: 10,
             overflowY: 'auto',
-            maxHeight: 'min(420px, 55vh)'
+            maxHeight: 'min(420px, 55vh)',
+            overscrollBehavior: 'contain'
           }}
         >
           {/* Option 1: Markdown */}
