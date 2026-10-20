@@ -61,6 +61,29 @@ describe('Firebase Config Universal Parser & Error Mapping', () => {
     expect(parsed?.authDomain).toBe('env-project-42.firebaseapp.com')
   })
 
+  it('parses Firebase web app snippet wrapped in <script> tags with comments and trailing commas', () => {
+    const htmlSnippet = `
+      <!-- Firebase configuration -->
+      <script>
+        const firebaseConfig = {
+          apiKey: "AIzaSyScriptTag_123456",
+          authDomain: "script-tag-app.firebaseapp.com",
+          projectId: "script-tag-app",
+          storageBucket: "script-tag-app.appspot.com",
+          messagingSenderId: "1122334455",
+          appId: "1:1122334455:web:abcdef123456",
+        };
+      </script>
+    `
+
+    const parsed = parseAnyFirebaseConfigInput(htmlSnippet)
+    expect(parsed).not.toBeNull()
+    expect(parsed?.apiKey).toBe('AIzaSyScriptTag_123456')
+    expect(parsed?.projectId).toBe('script-tag-app')
+    expect(parsed?.authDomain).toBe('script-tag-app.firebaseapp.com')
+    expect(parsed?.storageBucket).toBe('script-tag-app.appspot.com')
+  })
+
   it('rejects invalid or missing inputs cleanly', () => {
     expect(parseAnyFirebaseConfigInput('')).toBeNull()
     expect(parseAnyFirebaseConfigInput('random invalid string without keys')).toBeNull()

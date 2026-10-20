@@ -22,7 +22,9 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
   const [customConfigInput, setCustomConfigInput] = useState('')
   const [configFeedback, setConfigFeedback] = useState<string | null>(null)
   const [vaultMsg, setVaultMsg] = useState<string | null>(null)
-  const [rulesCopied, setRulesCopied] = useState(false)
+  const [firestoreRulesCopied, setFirestoreRulesCopied] = useState(false)
+  const [storageRulesCopied, setStorageRulesCopied] = useState(false)
+  const [showSetupGuide, setShowSetupGuide] = useState(false)
   const [isSendingVerification, setIsSendingVerification] = useState(false)
   const [isCheckingVerification, setIsCheckingVerification] = useState(false)
   const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false)
@@ -351,6 +353,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     try {
       const res = await edge.verifyAndConnectFirebase(customConfigInput.trim())
       if (res.success && res.config) {
+        patch({ customFirebaseConfig: 'encrypted' })
         setConfigFeedback(`Connected to Firebase project "${res.config.projectId}"! DPAPI encrypted at rest.`)
         setShowConfigInput(false)
         setCustomConfigInput('')
@@ -371,6 +374,7 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     setAuthError(null)
     try {
       await edge.resetCustomFirebaseConfig()
+      patch({ customFirebaseConfig: undefined })
       setConfigFeedback('Reset to default Edge-Drop cloud backend.')
       pushToast({ id: 'byo-reset', message: 'Reset to default Edge-Drop cloud backend.', tone: 'info' })
     } catch (err: any) {
@@ -380,34 +384,39 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
     }
   }
 
-  const handleCopySetupRules = () => {
-    playButtonClickSound()
-    const rulesText = [
-      '// Edge-Drop Firestore Security Rules',
-      "rules_version = '2';",
-      'service cloud.firestore {',
-      '  match /databases/{database}/documents {',
-      '    match /users/{userId}/{document=**} {',
-      '      allow read, write: if request.auth != null && request.auth.uid == userId;',
-      '    }',
-      '  }',
-      '}',
-      '',
-      '// Edge-Drop Firebase Storage Security Rules',
-      "rules_version = '2';",
-      'service firebase.storage {',
-      '  match /b/{bucket}/o {',
-      '    match /users/{userId}/{allPaths=**} {',
-      '      allow read, write: if request.auth != null && request.auth.uid == userId;',
-      '    }',
-      '  }',
-      '}'
-    ].join('\n')
+  const firestoreRulesSnippet = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}`
 
-    navigator.clipboard.writeText(rulesText).then(() => {
-      setRulesCopied(true)
-      setTimeout(() => setRulesCopied(false), 2500)
-      pushToast({ id: 'rules-copied', message: 'Security rules copied to clipboard!', tone: 'info' })
+  const storageRulesSnippet = `rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}`
+
+  const handleCopyFirestoreRules = () => {
+    playButtonClickSound()
+    navigator.clipboard.writeText(firestoreRulesSnippet).then(() => {
+      setFirestoreRulesCopied(true)
+      setTimeout(() => setFirestoreRulesCopied(false), 2500)
+      pushToast({ id: 'fs-rules-copied', message: 'Firestore security rules copied!', tone: 'info' })
+    }).catch(() => {})
+  }
+
+  const handleCopyStorageRules = () => {
+    playButtonClickSound()
+    navigator.clipboard.writeText(storageRulesSnippet).then(() => {
+      setStorageRulesCopied(true)
+      setTimeout(() => setStorageRulesCopied(false), 2500)
+      pushToast({ id: 'st-rules-copied', message: 'Storage security rules copied!', tone: 'info' })
     }).catch(() => {})
   }
 
@@ -1319,35 +1328,96 @@ export function CloudVaultSettings({ isHorizontal }: { isHorizontal?: boolean })
                 spellCheck={false}
               />
 
-              <div className="setting-pills">
+              <div className="setting-pills" style={{ flexWrap: 'wrap', gap: '6px' }}>
                 <button
                   type="button"
                   className="pill"
-                  onClick={handleCopySetupRules}
+                  onClick={handleCopyFirestoreRules}
                   style={{ fontSize: '11px' }}
+                  title="Copy isolated tenant rules for Cloud Firestore"
                 >
-                  {rulesCopied ? '✓ Rules Copied!' : 'Copy Security Rules'}
+                  {firestoreRulesCopied ? '✓ Firestore Rules Copied!' : 'Copy Firestore Rules'}
+                </button>
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={handleCopyStorageRules}
+                  style={{ fontSize: '11px' }}
+                  title="Copy isolated tenant rules for Firebase Storage"
+                >
+                  {storageRulesCopied ? '✓ Storage Rules Copied!' : 'Copy Storage Rules'}
                 </button>
                 <button
                   type="button"
                   className="pill active"
                   onClick={handleVerifyAndConnect}
                   disabled={isSubmitting || !customConfigInput.trim()}
+                  style={{ fontSize: '11px' }}
                 >
                   Connect & Encrypt
                 </button>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSetupGuide(!showSetupGuide)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.75)',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline'
+                  }}
+                >
+                  {showSetupGuide ? '▴ Hide Quick Guide' : '▾ Quick Setup Guide (3 baby steps)'}
+                </button>
                 <a
                   href="https://github.com/imsovikde/Edge-Drop/blob/main/docs/FIREBASE_SETUP.md"
                   target="_blank"
                   rel="noreferrer"
                   style={{ color: 'rgba(255, 255, 255, 0.55)', fontSize: '11px', textDecoration: 'underline' }}
                 >
-                  Setup Guide & Docs ↗
+                  Full Setup Guide & Docs ↗
                 </a>
               </div>
+
+              <AnimatePresence>
+                {showSetupGuide && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.25)',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      fontSize: '11px',
+                      lineHeight: '1.5',
+                      color: 'rgba(255, 255, 255, 0.85)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div>
+                      <strong>1. Create Project & Enable Auth:</strong> In <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>Firebase Console ↗</a>, create a project, open <em>Build → Authentication</em>, and enable <strong>Email/Password</strong> and <strong>Anonymous</strong>.
+                    </div>
+                    <div>
+                      <strong>2. Create Firestore & Paste Rules:</strong> Open <em>Build → Firestore Database</em>, click Create database, go to the <em>Rules</em> tab, and paste the <strong>Firestore Rules</strong> (use button above).
+                    </div>
+                    <div>
+                      <strong>3. Register Web App & Paste Config:</strong> In <em>Project Settings ⚙️</em>, click the Web (<code>&lt;/&gt;</code>) icon to register an app, copy the snippet or config, and paste it here!
+                    </div>
+                    <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>
+                      🔒 <strong>1-Click Rollback:</strong> You can disconnect your custom database and revert to the default backend anytime with the Reset button.
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>

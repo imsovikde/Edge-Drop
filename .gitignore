@@ -10,7 +10,8 @@ FIXES_CHECKLIST.md
 .vscode/*
 !.vscode/extensions.json
 
-docs/
+docs/*
+!docs/FIREBASE_SETUP.md
 dev-app-update.yml
 reddit-subreddits-for-edgedrop.md
 launch-playbook-edgedrop.md

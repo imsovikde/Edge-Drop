@@ -280,9 +280,13 @@ export function registerIpc(): void {
       // Reinitialize Firebase in main process
       await reinitializeFirebase(parsedConfig)
 
+      // Clear previous project session so new project auth starts clean
+      await authManager.signOut().catch(() => {})
+
       // Encrypt and save
       const encrypted = encryptCustomConfig(JSON.stringify(parsedConfig, null, 2))
-      saveSettings({ customFirebaseConfig: encrypted })
+      const nextSettings = saveSettings({ customFirebaseConfig: encrypted })
+      pushState.settings(nextSettings)
 
       return { success: true, config: parsedConfig }
     } catch (err: any) {
@@ -293,8 +297,10 @@ export function registerIpc(): void {
 
   handle('auth:reset-custom-config', async () => {
     try {
-      saveSettings({ customFirebaseConfig: undefined })
+      const nextSettings = saveSettings({ customFirebaseConfig: undefined })
       await reinitializeFirebase(null)
+      await authManager.signOut().catch(() => {})
+      pushState.settings(nextSettings)
       return true
     } catch (err) {
       console.error('[IPC] auth:reset-custom-config failed:', err)

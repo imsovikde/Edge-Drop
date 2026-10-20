@@ -42,7 +42,7 @@ export function parseAnyFirebaseConfigInput(rawInput: string): CustomFirebaseCon
   const input = rawInput.trim()
   if (!input) return null
 
-  // 1. If it contains curly braces (JSON or JS object snippet):
+  // 1. If it contains curly braces, attempt clean JSON parse first
   const firstBrace = input.indexOf('{')
   const lastBrace = input.lastIndexOf('}')
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -61,51 +61,36 @@ export function parseAnyFirebaseConfigInput(rawInput: string): CustomFirebaseCon
         }
       }
     } catch {
-      // Loose JS object format (e.g. const firebaseConfig = { apiKey: "...", })
-      const extractKey = (k: string): string | undefined => {
-        const regex = new RegExp(`['"]?${k}['"]?\\s*[:=]\\s*['"\`]([^'"\`]+)['"\`]`, 'i')
-        const m = objectContent.match(regex)
-        return m ? m[1].trim() : undefined
-      }
-
-      const apiKey = extractKey('apiKey')
-      const projectId = extractKey('projectId')
-      if (apiKey && projectId) {
-        return {
-          apiKey,
-          authDomain: extractKey('authDomain') || `${projectId}.firebaseapp.com`,
-          projectId,
-          storageBucket: extractKey('storageBucket') || `${projectId}.firebasestorage.app`,
-          messagingSenderId: extractKey('messagingSenderId'),
-          appId: extractKey('appId') || `${projectId}-web-app`,
-          measurementId: extractKey('measurementId')
-        }
-      }
+      // Loose JS object format or comments inside JSON
     }
   }
 
-  // 2. Line-by-line / Key-Value / .env format:
-  const lines = input.split(/\r?\n/)
-  const map: Record<string, string> = {}
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue
-    const match = trimmed.match(/^([A-Za-z0-9_]+)\s*[:=]\s*['"]?(.*?)['"]?;?$/)
-    if (match) {
-      const key = match[1].toLowerCase().replace(/^vite_/, '').replace(/^firebase_/, '')
-      const val = match[2].trim().replace(/^['"]|['"]$/g, '')
-      map[key] = val
+  // 2. Universal regex extraction from JS snippet, .env, HTML, or line-by-line format
+  const extractKey = (aliases: string[]): string | undefined => {
+    for (const alias of aliases) {
+      const pattern = new RegExp(
+        '(?:^|[\\s,{;])(?:[\'"]?(?:(?:vite_|firebase_|react_app_|next_public_)*' + alias + ')[\'"]?)\\s*[:=]\\s*(?:\'([^\'\\r\\n]+)\'|"([^"\\r\\n]+)"|`([^`\\r\\n]+)`|([^\\s,;}\\\'"`]+))',
+        'im'
+      )
+      const m = input.match(pattern)
+      if (m) {
+        const val = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').replace(/[,;]+$/, '').trim()
+        if (val) return val
+      }
     }
+    return undefined
   }
 
-  const apiKey = map['api_key'] || map['apikey']
-  const projectId = map['project_id'] || map['projectid']
+  const apiKey = extractKey(['apiKey', 'api_key', 'apikey'])
+  const projectId = extractKey(['projectId', 'project_id', 'projectid'])
+
   if (apiKey && projectId) {
-    const authDomain = map['auth_domain'] || map['authdomain'] || `${projectId}.firebaseapp.com`
-    const storageBucket = map['storage_bucket'] || map['storagebucket'] || `${projectId}.firebasestorage.app`
-    const messagingSenderId = map['messaging_sender_id'] || map['messagingsenderid']
-    const appId = map['app_id'] || map['appid'] || `${projectId}-web-app`
-    const measurementId = map['measurement_id'] || map['measurementid']
+    const authDomain = extractKey(['authDomain', 'auth_domain', 'authdomain']) || `${projectId}.firebaseapp.com`
+    const storageBucket = extractKey(['storageBucket', 'storage_bucket', 'storagebucket']) || `${projectId}.firebasestorage.app`
+    const messagingSenderId = extractKey(['messagingSenderId', 'messaging_sender_id', 'messagingsenderid'])
+    const appId = extractKey(['appId', 'app_id', 'appid']) || `${projectId}-web-app`
+    const measurementId = extractKey(['measurementId', 'measurement_id', 'measurementid'])
+
     return {
       apiKey,
       authDomain,
