@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8').replace(/\r\n/g, '\n')
 
-describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () => {
+describe('Modal Motion Engineering, Close Buttons & Invisible Clean Scrollbars', () => {
   const qrModal = read('src/components/QuickMobileModal.tsx')
   const exportModal = read('src/components/ItemExportModal.tsx')
   const transformModal = read('src/components/TransformModal.tsx')
@@ -37,7 +37,7 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
     expect(qrModal).toMatch(/<button[\s\S]*?aria-label="Close dialog"[\s\S]*?onPointerDown=/)
     expect(qrModal).toContain('handleClose()')
 
-    // Custom scrollbar
+    // Clean scrollbar
     expect(qrModal).toContain('edge-custom-scrollbar')
     expect(qrModal).toContain('overflowY')
   })
@@ -55,9 +55,9 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
     expect(exportModal).toMatch(/<button[\s\S]*?aria-label="Close dialog"[\s\S]*?onPointerDown=/)
     expect(exportModal).toContain('handleClose()')
 
-    // Custom scrollbar on format cards
+    // Clean scrollbar on format cards
     expect(exportModal).toContain('edge-custom-scrollbar')
-    expect(exportModal).toContain('overflowY: \'auto\'')
+    expect(exportModal).toContain("overflowY: 'auto'")
   })
 
   it('TransformModal has Framer Motion enter and exit transitions, tactile close button, and scrollbars', () => {
@@ -73,14 +73,14 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
     expect(transformModal).toMatch(/<button[\s\S]*?aria-label="Close dialog"[\s\S]*?onPointerDown=/)
     expect(transformModal).toContain('handleClose()')
 
-    // Custom scrollbar on transform list
+    // Clean scrollbar on transform list
     expect(transformModal).toContain('edge-custom-scrollbar')
-    expect(transformModal).toContain('overflowY: \'auto\'')
+    expect(transformModal).toContain("overflowY: 'auto'")
   })
 
-  it('PreviewFlyout content is scrollable with edge-custom-scrollbar and has dedicated close buttons', () => {
+  it('PreviewFlyout content is scrollable with edge-custom-scrollbar and has dedicated close buttons and tab motion', () => {
     expect(previewFlyout).toContain('edge-custom-scrollbar')
-    expect(previewFlyout).not.toContain("scrollbarWidth: 'none'")
+    expect(previewFlyout).toContain('flyoutTabVariants')
     // Action pills contain close buttons
     expect(previewFlyout).toContain("title={t('header.close') || 'Close preview (Esc)'}")
     expect(previewFlyout).toContain('setPreviewItemId(null)')
@@ -103,15 +103,15 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
 
     expect(langFlyout).toContain('onPointerDown={(e) => e.stopPropagation()}')
     expect(langFlyout).toContain('edge-custom-scrollbar')
-    expect(langFlyout).not.toContain("scrollbarWidth: 'none'")
 
     expect(indicatorFlyout).toContain('onPointerDown={(e) => e.stopPropagation()}')
   })
 
-  it('CSS files define .edge-custom-scrollbar and keyframe animations', () => {
-    const panelCss = read('src/styles/panel.css')
+  it('CSS files enforce invisible clean scrollbars and keyframe animations', () => {
     expect(globalCss).toContain('.edge-custom-scrollbar')
     expect(globalCss).toContain('.edge-custom-scrollbar::-webkit-scrollbar')
+    expect(globalCss).toContain('scrollbar-width: none')
+    expect(globalCss).toContain('display: none')
     expect(globalCss).toContain('@keyframes scaleIn')
     expect(globalCss).toContain('@keyframes scaleOut')
     expect(globalCss).toContain('@keyframes fadeIn')
@@ -119,8 +119,6 @@ describe('Modal Motion Engineering, Close Buttons & Draggable Scrollbars', () =>
 
     expect(itemCss).toContain('.edge-custom-scrollbar')
     expect(itemCss).toContain('.edge-custom-scrollbar::-webkit-scrollbar')
-
-    // Transform dropdown does not suppress scrollbar
-    expect(panelCss).not.toMatch(/\.transform-dropdown-list\s*\{[^}]*scrollbar-width:\s*none/)
+    expect(itemCss).toContain('scrollbar-width: none')
   })
 })

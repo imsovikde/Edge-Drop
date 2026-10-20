@@ -436,8 +436,8 @@ export function CodeBlock({
           outline: 'none',
           padding: `${paddingY} 0`,
           boxSizing: 'border-box',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'var(--cb-border) transparent',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
         }}
       >
         <Highlight code={trimmed} language={safeLanguage} theme={theme}>

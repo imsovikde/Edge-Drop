@@ -79,17 +79,19 @@ svg {
   background-clip: padding-box;
 }
 
-/* Custom tactile scrollbar for modals, popups, and preview content */
+/* Custom clean scrollbar for modals, popups, and preview content — invisible yet fully scrollable */
 .edge-custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .edge-custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 .edge-custom-scrollbar::-webkit-scrollbar-track {
@@ -97,18 +99,8 @@ svg {
 }
 
 .edge-custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  transition: background-color 0.15s ease;
-}
-
-.edge-custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.45);
-}
-
-.edge-custom-scrollbar::-webkit-scrollbar-thumb:active {
-  background: rgba(255, 255, 255, 0.65);
+  display: none;
+  background: transparent;
 }
 
 /* Modal and flyout entrance/exit keyframes */
@@ -175,18 +167,17 @@ input {
   color: inherit;
 }
 
+/* Clean UI: Scrollbars are hidden app-wide while preserving 100% full native scrolling */
 ::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
+  display: none;
+  width: 0;
+  height: 0;
   background: transparent;
 }
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* Respect OS reduced-motion when the user opts in via settings. */

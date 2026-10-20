@@ -2028,7 +2028,9 @@
 }
 
 .settings-shelf-card.display-card .shelf-card-bottom::-webkit-scrollbar {
-  width: 3px;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .settings-shelf-card.display-card .shelf-card-bottom::-webkit-scrollbar-track {
@@ -2036,8 +2038,8 @@
 }
 
 .settings-shelf-card.display-card .shelf-card-bottom::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
+  display: none;
+  background: transparent;
 }
 
 .settings-shelf-card.beacon-card {
