@@ -151,6 +151,7 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
+          make_latest: true
           files: |
             dist/*.exe
             dist/*.dmg

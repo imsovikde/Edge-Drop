@@ -227,9 +227,9 @@ function main() {
   }
 
   const notes = [
-    `# Edge-Drop v${version} — Spotless File Export, Docked Flyout Architecture & Tactile Motion Ergonomics`,
+    `# Edge-Drop v${version} — Bring Your Own Firebase, Universal Cloud Vault, Spotless Multi-Format File Export & Clean Invisible Scrollbars`,
     '',
-    `Edge-Drop is an ultra-fast clipboard manager that docks seamlessly on your display with authentic spring physics. Version ${version} introduces spotless multi-format file export (Markdown, Plain Text, ISO 32000-1 PDF), docked PreviewFlyout sub-view architecture for QR mobile transfer, text transforms, and file export (eliminating desktop blackout overlays), custom draggable scrollbars, and tactile hierarchical Escape navigation.`,
+    `Edge-Drop is an ultra-fast clipboard manager that docks seamlessly on your display with authentic spring physics. Version ${version} introduces Bring Your Own Firebase with universal multi-format configuration parsing, dedicated Firestore and Storage security rules, 1-click zero-lock-in rollback, spotless multi-format file export (Markdown, Plain Text, ISO 32000-1 PDF), docked PreviewFlyout sub-view architecture for QR mobile transfer, text transforms, and file export (eliminating desktop blackout overlays), clean invisible scrollbars with smooth scrolling, and tactile hierarchical Escape navigation.`,
     '',
     ...sections,
     table,
