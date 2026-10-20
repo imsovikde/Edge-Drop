@@ -234,7 +234,7 @@ npm run build:store  # outputs an MSIX package for Microsoft Store submission
 ### Real-Time Sync Telemetry & Automated Rolling Backups
 - **Sync Telemetry Drawer:** Real-time diagnostics drawer inspecting round-trip ping latency, remote document counts, Write-Ahead Log (WAL) queue status, and active connection health.
 - **Automated 5-File Rolling Local Backups:** Background engine creates rolling timestamped backups (`backups/history-YYYY-MM-DD-HHMMSS.edvault`) rotating the last 5 snapshots, with 1-click instant restoration from the settings drawer.
-- **Bring Your Own (BYO) Firebase Test Wizard:** Integrated credential validation wizard with instant connectivity and permission testing before saving custom credentials.
+- **Bring Your Own (BYO) Firebase Test Wizard:** Integrated credential validation wizard with instant connectivity and permission testing before saving custom credentials. Follow our step-by-step [Firebase Setup Guide](docs/FIREBASE_SETUP.md) for 1-click security rules and zero-lock-in rollback instructions.
 - **1-Click Device Diagnostic Issue Reporter:** Generates pre-filled GitHub issue templates with anonymized OS platform, display geometry, memory working set, and sync engine metrics.
 
 ### Pinboard Workspaces & Color-Coded Tag Palettes

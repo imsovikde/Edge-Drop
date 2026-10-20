@@ -250,8 +250,12 @@ export function registerIpc(): void {
 
   handle('auth:set-custom-config', async (configJson) => {
     try {
+      const parsedConfig = parseAnyFirebaseConfigInput(configJson)
+      await reinitializeFirebase(parsedConfig)
+      await authManager.signOut().catch(() => {})
       const encrypted = encryptCustomConfig(configJson)
-      saveSettings({ customFirebaseConfig: encrypted })
+      const nextSettings = saveSettings({ customFirebaseConfig: encrypted })
+      pushState.settings(nextSettings)
       return true
     } catch (err) {
       console.error('[IPC] auth:set-custom-config failed:', err)
