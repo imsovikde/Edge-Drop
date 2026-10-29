@@ -74,11 +74,13 @@
       "**/node_modules/@koromix/**/*",
       "**/node_modules/@resvg/**/*"
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "imsovikde",
-      "repo": "Edge-Drop"
-    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "imsovikde",
+        "repo": "Edge-Drop"
+      }
+    ],
     "win": {
       "target": [
         {
