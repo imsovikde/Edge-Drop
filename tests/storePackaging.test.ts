@@ -27,7 +27,7 @@ describe('GitHub vs Store packaging contracts (on-disk, not assumed)', () => {
         customExtensionsPath: string
         addAutoLaunchExtension?: boolean
       }
-      publish: { provider: string; owner: string; repo: string }
+      publish: { provider: string; owner: string; repo: string } | Array<{ provider: string; owner: string; repo: string }>
       nsis: { artifactName: string }
     }
   }
@@ -148,7 +148,8 @@ describe('GitHub vs Store packaging contracts (on-disk, not assumed)', () => {
   })
 
   it('keeps GitHub Releases as the NSIS publish source and NSIS artifact name', () => {
-    expect(pkg.build.publish).toEqual({
+    const publishConfig = Array.isArray(pkg.build.publish) ? pkg.build.publish[0] : pkg.build.publish
+    expect(publishConfig).toEqual({
       provider: 'github',
       owner: 'imsovikde',
       repo: 'Edge-Drop'
