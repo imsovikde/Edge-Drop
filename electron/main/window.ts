@@ -16,7 +16,7 @@ import { BrowserWindow, screen, shell, powerMonitor, app } from 'electron'
 import { join } from 'node:path'
 import os from 'node:os'
 import koffi from 'koffi'
-import { APP_CONFIG } from './config'
+import { APP_CONFIG, shouldStartHidden } from './config'
 import { runtime } from './config'
 import { PATHS } from '../store/paths'
 import { TRANSLATIONS, en } from '../../src/i18n/translations'
@@ -75,6 +75,8 @@ if (process.platform === 'win32') {
 
 const GWL_EXSTYLE = -20
 const WS_EX_NOACTIVATE = 0x08000000
+const WS_EX_TOOLWINDOW = 0x00000080
+const WS_EX_APPWINDOW = 0x00040000
 
 function getHwnd(win: BrowserWindow | null): number | bigint {
   if (!win || win.isDestroyed()) return 0
@@ -92,12 +94,15 @@ export function applyNoActivateStyle(win: BrowserWindow | null, enable: boolean)
     const hwnd = getHwnd(win)
     if (!hwnd) return
     const currentExStyle = Number(getWindowLongPtrFn(hwnd, GWL_EXSTYLE))
-    const newExStyle = enable
+    let newExStyle = enable
       ? (currentExStyle | WS_EX_NOACTIVATE)
       : (currentExStyle & ~WS_EX_NOACTIVATE)
+    // Enforce toolwindow and strip appwindow so the panel never appears on the taskbar
+    newExStyle = (newExStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
     if (newExStyle !== currentExStyle) {
       setWindowLongPtrFn(hwnd, GWL_EXSTYLE, newExStyle)
     }
+    win.setSkipTaskbar(true)
   } catch (err) {
     console.error('[Window] Failed to apply WS_EX_NOACTIVATE:', err)
   }
@@ -701,8 +706,8 @@ function getStickGeometry(): { x: number; y: number; width: number; height: numb
       })
       sendToMainWindow('state:settings', settings)
       if (!recoveredViaBounds) {
-        // Genuinely fell back — briefly show panel on new location.
-        popUpAndRetract(1500)
+        // Genuinely fell back — reposition silently without uninvited popups
+        repositionWindow()
       }
     }
   } else {
@@ -862,10 +867,10 @@ export function createWindow(): BrowserWindow {
   // Keep the panel glued to the primary display if the work area changes.
   screen.on('display-metrics-changed', () => handleDisplayChangeDebounced(false))
   screen.on('display-added', () => {
-    handleDisplayChangeDebounced(true)
+    handleDisplayChangeDebounced(false)
   })
   screen.on('display-removed', () => {
-    handleDisplayChangeDebounced(true)
+    handleDisplayChangeDebounced(false)
   })
 
   // Respect OS-level always-on-top reordering.
@@ -888,9 +893,13 @@ export function createWindow(): BrowserWindow {
 
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) return
-    mainWindow.showInactive()
-    // 'screen-saver' level stays above fullscreen browser windows and games.
-    mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    const hiddenLaunch = shouldStartHidden()
+    if (!hiddenLaunch) {
+      mainWindow.showInactive()
+      // 'screen-saver' level stays above fullscreen browser windows and games.
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    }
+    mainWindow.setSkipTaskbar(true)
     applyNoActivateStyle(mainWindow, true)
   })
 
@@ -1078,8 +1087,10 @@ export function popUpAndRetract(durationMs = 1500): void {
 export function repositionWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
   if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.showInactive()
-  mainWindow.setAlwaysOnTop(true, 'screen-saver')
+  if (mainWindow.isVisible()) {
+    mainWindow.showInactive()
+    mainWindow.setAlwaysOnTop(true, 'screen-saver')
+  }
   mainWindow.setSkipTaskbar(true)
   const g = getStickGeometry()
   mainWindow.setBounds({ ...g })
@@ -1127,6 +1138,7 @@ export function setWindowFocusable(focusable: boolean): void {
         applyNoActivateStyle(mainWindow, true)
         traceFg('setWindowFocusable(false) after NOACTIVATE')
         mainWindow.setFocusable(false)
+        mainWindow.setSkipTaskbar(true)
         traceFg('setWindowFocusable(false) after setFocusable')
         focusabilityApplied = false
         const after = currentFg()
@@ -1144,6 +1156,7 @@ export function setWindowFocusable(focusable: boolean): void {
       }
       applyNoActivateStyle(mainWindow, false)
       mainWindow.setFocusable(true)
+      mainWindow.setSkipTaskbar(true)
       focusabilityApplied = true
       mainWindow.focus()
       traceFg('setWindowFocusable(true) exit')

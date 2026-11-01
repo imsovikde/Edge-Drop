@@ -499,22 +499,27 @@ describe('GitHub Run-key quoting and update heal', () => {
     expect(res.ok).toBe(true)
   })
 
-  it('0.3.1 bug recovery: restores launchAtLogin: true when unblocked Run key exists', async () => {
+  it('respects user launchAtLogin: false and removes Run key when os.enabled is true', async () => {
     mocks.exePath = spacedExe
     mocks.loadSettings.mockReturnValue({ launchAtLogin: false })
     mocks.getLoginItemSettings.mockReturnValue({
       launchItems: [],
       executableWillLaunchAtLogin: false
     })
-    // Simulate reg query finding the Run key
+    let keyDeleted = false
     mocks.execFileSync.mockImplementation((bin: string, args: string[]) => {
       if (bin === 'reg') {
         const verb = (args as string[])[0]
+        if (verb === 'delete') {
+          keyDeleted = true
+          return ''
+        }
         if (verb === 'query') {
           if ((args as string[])[1].includes('StartupApproved')) {
             throw new Error('not found') // Not blocked
           }
           if ((args as string[])[1].includes('Run') && (args as string[])[3] === 'Edge-Drop') {
+            if (keyDeleted) throw new Error('not found')
             return `\r\n    Edge-Drop    REG_SZ    "${spacedExe}" --hidden\r\n`
           }
         }
@@ -523,8 +528,8 @@ describe('GitHub Run-key quoting and update heal', () => {
     })
 
     const next = await reconcileLaunchAtLoginOnStartup()
-    expect(mocks.saveSettings).toHaveBeenCalledWith({ launchAtLogin: true })
-    expect(next.launchAtLogin).toBe(true)
+    expect(keyDeleted).toBe(true)
+    expect(next.launchAtLogin).toBe(false)
   })
 
   it('StartupApproved block detection and unblocking', () => {
