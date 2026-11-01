@@ -9,7 +9,7 @@
  */
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, unlinkSync } from 'node:fs'
 import { atomicWriteFileSync, computeSha256 } from './cryptoIntegrity'
 import type { ClipboardItem, Settings } from '../../shared/types'
 
@@ -96,7 +96,10 @@ class AdaptiveGovernor {
     }
   }
 
+  private walPersistTimer: NodeJS.Timeout | null = null
+
   private loadWal(): void {
+    this.cleanupDanglingWalTemps()
     try {
       const file = getWalPath()
       if (existsSync(file)) {
@@ -116,7 +119,46 @@ class AdaptiveGovernor {
     }
   }
 
-  private persistWal(): void {
+  private cleanupDanglingWalTemps(): void {
+    try {
+      const dir = app.getPath('userData')
+      if (existsSync(dir)) {
+        const files = readdirSync(dir)
+        for (const f of files) {
+          if (f.startsWith('sync-wal.json.tmp.') || f.startsWith('items.json.tmp.')) {
+            try {
+              unlinkSync(join(dir, f))
+            } catch {
+              /* ignore busy temp file */
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore temp cleanup failure */
+    }
+  }
+
+  /**
+   * Schedule asynchronous debounced WAL persistence (150ms).
+   * Prevents synchronous disk flush locks when hundreds of mutations arrive in rapid succession.
+   */
+  public scheduleWalPersist(delayMs = 150): void {
+    if (this.walPersistTimer) return
+    this.walPersistTimer = setTimeout(() => {
+      this.walPersistTimer = null
+      this.persistWalSync()
+    }, delayMs)
+  }
+
+  /**
+   * Synchronously writes the dirty WAL state to disk with cryptographic atomicity.
+   */
+  public persistWalSync(): void {
+    if (this.walPersistTimer) {
+      clearTimeout(this.walPersistTimer)
+      this.walPersistTimer = null
+    }
     try {
       const all: WalEntry[] = Array.from(this.dirtyItems.values())
       if (this.settingsDirty) {
@@ -129,7 +171,18 @@ class AdaptiveGovernor {
   }
 
   /**
-   * Queue an item mutation with 300ms sliding-window coalescing.
+   * Persists WAL state to disk. By default, debounces to protect the main process event loop.
+   */
+  public persistWal(immediate = false): void {
+    if (immediate || process.env.NODE_ENV === 'test') {
+      this.persistWalSync()
+    } else {
+      this.scheduleWalPersist()
+    }
+  }
+
+  /**
+   * Queue an item mutation with sliding-window coalescing and debounced disk persistence.
    */
   public queueItem(item: ClipboardItem, action: 'upsert' | 'delete', immediate = false): void {
     const existing = this.dirtyItems.get(item.id)
@@ -141,8 +194,28 @@ class AdaptiveGovernor {
       retryCount: existing ? existing.retryCount : 0
     }
     this.dirtyItems.set(item.id, entry)
-    this.persistWal()
+    this.persistWal(immediate || process.env.NODE_ENV === 'test')
     this.scheduleCoalescedFlush(immediate || action === 'upsert')
+  }
+
+  /**
+   * Queue a batch of item mutations with a single debounced WAL persistence and single flush.
+   */
+  public queueBatch(items: Array<{ item: ClipboardItem; action: 'upsert' | 'delete' }>): void {
+    const now = Date.now()
+    for (const { item, action } of items) {
+      const existing = this.dirtyItems.get(item.id)
+      const entry: WalEntry = {
+        id: item.id,
+        action,
+        item,
+        timestamp: now,
+        retryCount: existing ? existing.retryCount : 0
+      }
+      this.dirtyItems.set(item.id, entry)
+    }
+    this.scheduleWalPersist(100)
+    this.scheduleCoalescedFlush(false)
   }
 
   /**
@@ -301,12 +374,19 @@ class AdaptiveGovernor {
   }
 
   /**
-   * Cleanly dispose timers and clear in-memory buffers upon application exit.
+   * Cleanly dispose timers, persist any pending WAL writes synchronously, and clear in-memory buffers upon application exit.
    */
   public dispose(): void {
     if (this.coalesceTimer) {
       clearTimeout(this.coalesceTimer)
       this.coalesceTimer = null
+    }
+    if (this.walPersistTimer) {
+      clearTimeout(this.walPersistTimer)
+      this.walPersistTimer = null
+    }
+    if (this.dirtyItems.size > 0 || this.settingsDirty) {
+      this.persistWalSync()
     }
     this.dirtyItems.clear()
     this.settingsDirty = null

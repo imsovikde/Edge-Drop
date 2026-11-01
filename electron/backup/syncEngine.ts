@@ -675,15 +675,29 @@ class SyncEngine {
       console.warn('[SyncEngine] Remote settings pull warning:', err)
     }
 
-    // 2. Pull Items
+    // 2. Pull Items with pagination support
     try {
-      const itemsRes = await this.fetchFirestore(
-        `users/${encodeURIComponent(userId)}/items?pageSize=300`,
-        { method: 'GET' }
-      )
-      if (itemsRes.ok) {
+      const documents: any[] = []
+      let pageToken: string | undefined = undefined
+      let pageCount = 0
+
+      do {
+        pageCount++
+        const queryParams = new URLSearchParams({ pageSize: '300' })
+        if (pageToken) queryParams.set('pageToken', pageToken)
+        const itemsRes = await this.fetchFirestore(
+          `users/${encodeURIComponent(userId)}/items?${queryParams.toString()}`,
+          { method: 'GET' }
+        )
+        if (!itemsRes.ok) break
         const listData = (await itemsRes.json()) as any
-        const documents: any[] = listData?.documents || []
+        if (Array.isArray(listData?.documents)) {
+          documents.push(...listData.documents)
+        }
+        pageToken = listData?.nextPageToken
+      } while (pageToken && pageCount < 10 && documents.length < 2000)
+
+      if (documents.length > 0 || pageCount > 0) {
         this.cloudItemCount = documents.length
         const store = getStore()
         let localModified = false
@@ -801,12 +815,16 @@ class SyncEngine {
 
         await runWithConcurrency(documents, CONCURRENCY_LIMIT, processDocument)
 
-        // Backfill pre-existing local items not yet in remote cloud vault
+        // Backfill pre-existing local items not yet in remote cloud vault in a single atomic batch
         const localItems = store.list()
+        const backfills: Array<{ item: ClipboardItem; action: 'upsert' }> = []
         for (const local of localItems) {
           if (!remoteIds.has(local.id)) {
-            adaptiveGovernor.queueItem(local, 'upsert')
+            backfills.push({ item: local, action: 'upsert' })
           }
+        }
+        if (backfills.length > 0) {
+          adaptiveGovernor.queueBatch(backfills)
         }
 
         this.lastSyncCursor = syncStartTime

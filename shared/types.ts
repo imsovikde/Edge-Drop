@@ -63,7 +63,7 @@ export type ClipboardImageFields = {
 
 /** Discriminated union describing the payload of a clipboard item. */
 export type ItemData =
-  | { kind: 'text'; text: string; html?: string; isUrl: boolean; isColor?: boolean; hasFullPayload?: boolean; previewText?: string; fullText?: string }
+  | { kind: 'text'; text: string; html?: string; isUrl: boolean; isColor?: boolean; hasFullPayload?: boolean; previewText?: string; fullText?: string; contentSig?: string }
   | ({ kind: 'image' } & ClipboardImageFields)
   | { kind: 'image-collection'; images: ClipboardImageFields[] }
   | { kind: 'files'; paths: string[]; entries?: FileEntry[] }
@@ -113,7 +113,7 @@ export interface ClipboardItemDto extends Omit<ClipboardItem, 'data'> {
   tags?: string[]
   colorTag?: ColorTag
   data:
-  | { kind: 'text'; text: string; html?: string; isUrl: boolean; isColor?: boolean; hasFullPayload?: boolean; previewText?: string }
+  | { kind: 'text'; text: string; html?: string; isUrl: boolean; isColor?: boolean; hasFullPayload?: boolean; previewText?: string; contentSig?: string }
   | ({ kind: 'image'; preview: string } & ClipboardImageFields)
   | { kind: 'image-collection'; images: Array<ClipboardImageFields & { preview: string }> }
   | { kind: 'files'; paths: string[]; previews?: string[]; entries?: FileEntry[] }

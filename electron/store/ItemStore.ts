@@ -9,7 +9,7 @@
  *   - Persist the index to JSON and image bytes to per-item PNG files.
  *   - Convert internal items to the serializable DTO form for the renderer.
  */
-import { existsSync, readFileSync, writeFileSync, rmSync, statSync, readdirSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, rmSync, statSync, readdirSync, mkdirSync, unlinkSync } from 'node:fs'
 import { join, extname, basename as pathBasename } from 'node:path'
 import { nativeImage, safeStorage } from 'electron'
 import { thumbnailUrlForFile, thumbnailUrlForStoredImage } from '../main/imageProtocol'
@@ -107,7 +107,29 @@ export class ItemStore {
   }
 
   /** Load persisted state from disk. Called once at startup. */
+  private cleanDanglingTemps(): void {
+    try {
+      const dir = PATHS.root()
+      if (existsSync(dir)) {
+        const files = readdirSync(dir)
+        for (const f of files) {
+          if (f.startsWith('items.json.tmp.') || f.startsWith('sync-wal.json.tmp.')) {
+            try {
+              unlinkSync(join(dir, f))
+            } catch {
+              /* ignore busy temp */
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Load persisted state from disk. Called once at startup. */
   load(): void {
+    this.cleanDanglingTemps()
     try {
       const file = PATHS.indexFile()
       if (!existsSync(file)) {
@@ -198,9 +220,20 @@ export class ItemStore {
   private rebuildIndex(): void {
     this.sigToId.clear()
     for (const it of this.items) {
-      if (it.data.kind === 'text' && it.data.hasFullPayload) {
-        const full = this.getFullText(it.id)
-        this.sigToId.set(contentSignature({ ...it.data, text: full }), it.id)
+      if (it.data.kind === 'text') {
+        const textData = it.data as any
+        if (textData.contentSig) {
+          this.sigToId.set(textData.contentSig, it.id)
+        } else if (textData.hasFullPayload) {
+          const full = this.getFullText(it.id)
+          const sig = contentSignature({ ...it.data, text: full })
+          textData.contentSig = sig
+          this.sigToId.set(sig, it.id)
+        } else {
+          const sig = contentSignature(it.data)
+          textData.contentSig = sig
+          this.sigToId.set(sig, it.id)
+        }
       } else {
         this.sigToId.set(contentSignature(it.data), it.id)
       }
@@ -315,9 +348,15 @@ export class ItemStore {
         this.writeTextPayload(id, data.text)
         finalData = {
           ...data,
+          contentSig: sig,
           hasFullPayload: true,
           previewText: data.text.slice(0, 300),
           text: data.text.slice(0, 300)
+        }
+      } else {
+        finalData = {
+          ...data,
+          contentSig: sig
         }
       }
     }
