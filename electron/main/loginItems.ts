@@ -443,20 +443,7 @@ export async function reconcileLaunchAtLoginOnStartup(): Promise<Settings> {
   }
 
   if (settings.launchAtLogin === false && os.enabled) {
-    // GitHub recovery check:
-    // If user has settings=false, but the Run key exists for Edge-Drop and is NOT blocked by user:
-    // This happens when 0.3.1's false-negative poll bug erroneously saved launchAtLogin: false.
-    // Self-heal: restore settings to true and ensure key is properly quoted!
-    if (!isStoreBuild()) {
-      const exe = app.getPath('exe')
-      const raw = getRawGithubRunCommand(CANONICAL_LOGIN_ITEM_NAME)
-      if (raw && isOurLoginExe(raw, exe) && !isBlockedInStartupApproved(CANONICAL_LOGIN_ITEM_NAME)) {
-        console.log('[LoginItems] Recovering launchAtLogin from existing active Run key')
-        applyGithubLaunchAtLogin(true)
-        return saveSettings({ launchAtLogin: true })
-      }
-    }
-
+    // Respect user setting: disable the Windows Run key / login item
     const applied = await applyLaunchAtLogin(false)
     if (applied.enabled !== settings.launchAtLogin) {
       return saveSettings({ launchAtLogin: applied.enabled })
