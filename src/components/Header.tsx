@@ -65,10 +65,12 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
 
   const handleLedClick = async () => {
     playButtonClickSound()
-    setSettingsTab('cloud')
     if (!settingsOpen) {
       setSettingsOpen(true)
     }
+    setTimeout(() => {
+      setSettingsTab('cloud')
+    }, 50)
     try {
       await edge.forceSync()
     } catch { /* ignore */ }
@@ -312,40 +314,42 @@ export function Header({ isHorizontal = false, itemCount, clearProps }: HeaderPr
           </button>
         )}
 
-        {/* Hardware-style Green/Red/Amber Sync Status LED */}
-        <button
-          type="button"
-          className="sync-led-btn"
-          aria-label={syncTooltip}
-          title={syncTooltip}
-          onClick={handleLedClick}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            padding: 4,
-            display: 'grid',
-            placeItems: 'center',
-            cursor: 'pointer',
-            borderRadius: '50%',
-            outline: 'none',
-            flexShrink: 0,
-            width: 22,
-            height: 22,
-            position: 'relative'
-          }}
-        >
-          <span
+        {/* Hardware-style Green/Red/Amber Sync Status LED (only displayed on main shelf when user is signed into Cloud Vault) */}
+        {!settingsOpen && !!cloudSyncState?.user && (
+          <button
+            type="button"
+            className="sync-led-btn"
+            aria-label={syncTooltip}
+            title={syncTooltip}
+            onClick={handleLedClick}
             style={{
-              width: 7,
-              height: 7,
+              background: 'transparent',
+              border: 'none',
+              padding: 4,
+              display: 'grid',
+              placeItems: 'center',
+              cursor: 'pointer',
               borderRadius: '50%',
-              backgroundColor: ledColor,
-              boxShadow: ledGlow,
-              transition: 'background-color 0.25s ease, box-shadow 0.25s ease',
-              display: 'block'
+              outline: 'none',
+              flexShrink: 0,
+              width: 22,
+              height: 22,
+              position: 'relative'
             }}
-          />
-        </button>
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                backgroundColor: ledColor,
+                boxShadow: ledGlow,
+                transition: 'background-color 0.25s ease, box-shadow 0.25s ease',
+                display: 'block'
+              }}
+            />
+          </button>
+        )}
 
         <button
           type="button"
