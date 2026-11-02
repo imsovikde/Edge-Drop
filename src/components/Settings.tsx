@@ -56,6 +56,9 @@ export function Settings({
   const setSliderActive = useStore((s) => s.setSliderActive)
   const edgeTransition = useStore((s) => s.edgeTransition)
   const startEdgeTransition = useStore((s) => s.startEdgeTransition)
+  const cloudSyncState = useStore((s) => s.cloudSyncState)
+  const isSyncing = cloudSyncState?.status === 'syncing'
+  const isVaultErrorOrDirty = !!cloudSyncState?.user && (cloudSyncState?.status === 'error' || cloudSyncState?.status === 'offline' || (cloudSyncState?.pendingMutations != null && cloudSyncState.pendingMutations > 0))
 
   const getLangLabel = (l: { code: string; name: string; nativeName: string }) =>
     l.code === 'system' || l.nativeName.includes('(') ? l.nativeName : `${l.nativeName} (${l.name})`
@@ -1873,6 +1876,9 @@ export function Settings({
             <div className="settings-tab-bar">
               {TABS.map((tab) => {
                 const active = activeTab === tab.id
+                const isVaultTab = tab.id === 'cloud'
+                const showVaultBadge = isVaultTab && !!cloudSyncState?.user && (isSyncing || isVaultErrorOrDirty)
+                const badgeColor = isSyncing ? '#F59E0B' : '#EF4444'
                 return (
                   <button
                     key={tab.id}
@@ -1885,6 +1891,20 @@ export function Settings({
                     }}
                   >
                     <span className="settings-tab-text">{tab.label}</span>
+                    {showVaultBadge && (
+                      <span
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          backgroundColor: badgeColor,
+                          boxShadow: isSyncing ? '0 0 5px rgba(245, 158, 11, 0.75)' : '0 0 5px rgba(239, 68, 68, 0.65)',
+                          display: 'inline-block',
+                          marginLeft: 5,
+                          flexShrink: 0
+                        }}
+                      />
+                    )}
                   </button>
                 )
               })}

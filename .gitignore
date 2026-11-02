@@ -37,3 +37,4 @@ ui-debug.log*
 recovery-staging/
 release-notes.md
 .ralph-loop-state.json
+sync-wal.json

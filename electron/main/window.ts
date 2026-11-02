@@ -16,7 +16,7 @@ import { BrowserWindow, screen, shell, powerMonitor, app } from 'electron'
 import { join } from 'node:path'
 import os from 'node:os'
 import koffi from 'koffi'
-import { APP_CONFIG, shouldStartHidden } from './config'
+import { APP_CONFIG } from './config'
 import { runtime } from './config'
 import { PATHS } from '../store/paths'
 import { TRANSLATIONS, en } from '../../src/i18n/translations'
@@ -893,12 +893,9 @@ export function createWindow(): BrowserWindow {
 
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) return
-    const hiddenLaunch = shouldStartHidden()
-    if (!hiddenLaunch) {
-      mainWindow.showInactive()
-      // 'screen-saver' level stays above fullscreen browser windows and games.
-      mainWindow.setAlwaysOnTop(true, 'screen-saver')
-    }
+    mainWindow.showInactive()
+    // 'screen-saver' level stays above fullscreen browser windows and games.
+    mainWindow.setAlwaysOnTop(true, 'screen-saver')
     mainWindow.setSkipTaskbar(true)
     applyNoActivateStyle(mainWindow, true)
   })

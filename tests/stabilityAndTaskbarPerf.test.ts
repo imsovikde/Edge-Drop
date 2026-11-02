@@ -70,14 +70,29 @@ describe('Stability, Crash Prevention, and Taskbar Isolation Verification', () =
     expect(content).toContain('win.setSkipTaskbar(true)')
   })
 
-  it('verifies electron/main/window.ts guards showInactive during ready-to-show and repositionWindow', () => {
+  it('verifies electron/main/window.ts invokes showInactive and WS_EX_TOOLWINDOW during ready-to-show so proximity polling functions on boot', () => {
     const windowPath = join(__dirname, '../electron/main/window.ts')
     const content = readFileSync(windowPath, 'utf8')
-    expect(content).toContain('const hiddenLaunch = shouldStartHidden()')
-    expect(content).toContain('if (!hiddenLaunch) {')
-    expect(content).toContain('if (mainWindow.isVisible()) {')
+    expect(content).toContain("mainWindow.once('ready-to-show', () => {")
+    expect(content).toContain('mainWindow.showInactive()')
+    expect(content).toContain("mainWindow.setAlwaysOnTop(true, 'screen-saver')")
+    expect(content).toContain('applyNoActivateStyle(mainWindow, true)')
     // No spurious popups on display changes
     expect(content).not.toContain("screen.on('display-added', () => {\n    handleDisplayChangeDebounced(true)")
+  })
+
+  it('verifies src/components/Header.tsx guards sync-led-btn to only render when cloud user is authenticated and settings is closed', () => {
+    const headerPath = join(__dirname, '../src/components/Header.tsx')
+    const content = readFileSync(headerPath, 'utf8')
+    expect(content).toContain('!settingsOpen && !!cloudSyncState?.user')
+    expect(content).toContain('className="sync-led-btn"')
+  })
+
+  it('verifies src/components/Settings.tsx displays vault badge on vault tab when authenticated', () => {
+    const settingsPath = join(__dirname, '../src/components/Settings.tsx')
+    const content = readFileSync(settingsPath, 'utf8')
+    expect(content).toContain('showVaultBadge')
+    expect(content).toContain("const isVaultTab = tab.id === 'cloud'")
   })
 
   it('verifies electron/main/loginItems.ts respects user preference and avoids 0.3.1 resurrection', () => {
