@@ -1,0 +1,48 @@
+diff a/README.md b/README.md	(rejected hunks)
+@@ -17,13 +17,13 @@
+ </p>
+ 
+ <p align="center">
+-  <a href="#download"><img src=".github/readme/art/nav-download.svg" width="104" alt="Download"></a>
+-  <a href="#whats-new-in-040"><img src=".github/readme/art/nav-new.svg" width="120" alt="What's new"></a>
+-  <a href="#demos"><img src=".github/readme/art/nav-demos.svg" width="80" alt="Demos"></a>
+-  <a href="#features"><img src=".github/readme/art/nav-features.svg" width="104" alt="Features"></a>
+-  <a href="#privacy--security"><img src=".github/readme/art/nav-privacy.svg" width="96" alt="Privacy"></a>
+-  <a href="#build-from-source"><img src=".github/readme/art/nav-build.svg" width="80" alt="Build"></a>
+-  <a href="#support--sponsor"><img src=".github/readme/art/nav-sponsor.svg" width="96" alt="Sponsor"></a>
++  <a href="#-download"><img src=".github/readme/art/nav-download.svg" width="104" alt="Download"></a>
++  <a href="#-whats-new-in-040"><img src=".github/readme/art/nav-new.svg" width="120" alt="What's new"></a>
++  <a href="#-demos"><img src=".github/readme/art/nav-demos.svg" width="80" alt="Demos"></a>
++  <a href="#-features"><img src=".github/readme/art/nav-features.svg" width="104" alt="Features"></a>
++  <a href="#-privacy--security"><img src=".github/readme/art/nav-privacy.svg" width="96" alt="Privacy"></a>
++  <a href="#-build-from-source"><img src=".github/readme/art/nav-build.svg" width="80" alt="Build"></a>
++  <a href="#-support--sponsor"><img src=".github/readme/art/nav-sponsor.svg" width="96" alt="Sponsor"></a>
+ </p>
+ 
+ <p align="center">
+@@ -254,6 +254,16 @@ A huge thank you to the sponsors who keep Edge-Drop going:
+       <sub><a href="https://elitistreview.com/" target="_blank">Website</a> · <a href="https://x.com/Elitistreview" target="_blank">X</a> · <a href="https://bsky.app/profile/elitistreview.com" target="_blank">Bluesky</a></sub>
+     </td>
+   </tr>
++  <tr>
++    <td width="72" align="center" valign="middle">
++      <a href="https://boxstorium.com/" target="_blank"><img src=".github/readme/sponsors/boxstorium.png" width="56" height="56" alt="Boxstorium"></a>
++    </td>
++    <td valign="middle">
++      <b><a href="https://boxstorium.com/" target="_blank">Boxstorium</a></b><br/>
++      <i>Handmade custom storage boxes for board and card games, by Viktor Csete.</i><br/>
++      <sub><a href="https://boxstorium.com/" target="_blank">Website</a> · <a href="https://boxstorium.etsy.com/" target="_blank">Etsy</a></sub>
++    </td>
++  </tr>
+ </table>
+ 
+ <p align="center">
+@@ -344,7 +354,7 @@ Edge-Drop handles everything you copy, so it's built to keep that on your PC.
+ - **Local only.** Your history stays on your computer. There's no account, no cloud sync, and no telemetry or analytics.
+ - **Network use is limited to:** checking GitHub for updates (installer edition, unless updates are set to Off), downloading a web image you drag onto the shelf, and links you choose to open.
+ - **Encrypted at rest.** History is encrypted with Windows' own data protection (DPAPI, via Electron `safeStorage`) and is never rewritten as plain text once encrypted.
+-- **Respects private copies.** Content marked by the app it came from as not for clipboard history or monitoring (the Windows flags password managers use) is skipped. Incognito pauses capture entirely.
++- **Respects private copies.** Content marked by the app it came from as not for clipboard history or monitoring (the Windows flags password managers use) is skipped. Edge-Drop runs this check on every copy itself, since Windows' clipboard history settings only cover Win+V. Incognito pauses capture entirely.
+ - **Never loses history.** Saves are atomic (write, flush, rename). History that can't be read is set aside and merged back later, never overwritten.
+ 
+ | Control | How |
